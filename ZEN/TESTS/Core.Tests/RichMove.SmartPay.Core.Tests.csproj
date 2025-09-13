@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\SOURCE\Core\RichMove.SmartPay.Core.csproj" />
+    <ProjectReference Include="..\..\SOURCE\Infrastructure\RichMove.SmartPay.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

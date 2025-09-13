@@ -1,0 +1,222 @@
+diff --git a/WPS/WP1_Review_Notes.md b/WPS/WP1_Review_Notes.md
+new file mode 100644
+index 0000000..c0ffee1
+--- /dev/null
++++ b/WPS/WP1_Review_Notes.md
+@@ -0,0 +1,173 @@
++# Work Package 1 — Review & Alignment Notes
++
++> Scope: bring WP1 from “good” to “aligned” with repo goals. This file **highlights** the exact changes I’d like to see in WP1 without assuming its current text layout. Use this as a checklist when you update the canonical WP1 document.
++
++## 1) Clarify Deliverables (outcomes over activity)
++- **Outputs**:
++  - Bootstrapped **ZEN** code skeleton (no business logic): Core/Domain, Infrastructure, API shells; empty but compilable.
++  - **Hello-Supabase** connectivity smoke (env-guarded), **Hello-Shopify** stub (typed client interface, no secrets).
++  - **Hello-FX** module interface (no real rates), DI wiring and logging working end-to-end.
++  - Unit-test project boots; one “canary” test per project.
++- **Artifacts**:
++  - Updated WP1 doc (this review merged), Gantt ticked, stage-gate notes stored.
++  - `.github/workflows/ci.yml` active on PRs.
++
++## 2) Commit Points (logical, reviewable)
++1. **CP-1**: ZEN solution compiles; project layout created; CI green on empty tests.
++2. **CP-2**: DI + Logging + Options binding work in API and Worker (smoke).
++3. **CP-3**: Hello-Supabase canaries (env present ⇒ connect & ping; env absent ⇒ graceful skip).
++4. **CP-4**: Hello-Shopify client interface + typed options; no live calls.
++5. **CP-5**: Hello-FX domain interfaces + DTOs + null impl; test doubles in place.
++
++Each CP closes with a **short PR** referencing WP1, including screenshots/logs of CI and a one-liner risk update.
++
++## 3) Definition of Done (WP1)
++- Solution compiles on clean machine with `.NET 9` and `dotnet restore` only.
++- CI runs format/analyzers/tests on PR; master is protected (no red merges).
++- No secrets in repo. `.env.example` provided; Supabase and third-party keys **only** from env/KeyVault.
++- Minimal tests exist and run: `dotnet test` produces coverage (even if small) and fails on exceptions.
++- Coding guidelines acknowledged in PR description (link to `DOCS/Coding_Guidelines.md`).
++
++## 4) Tests to add now (tiny but real)
++- **Config binding**: invalid config ⇒ startup fails fast with clear message; valid config ⇒ binds typed options.
++- **DI smoke**: required services resolve (Core services, clock, logger, null-FX provider).
++- **Controller/Endpoint**: `/health/ready` returns 200; `/health/live` returns 200.
++- **Hello-FX**: calling the null provider returns a sentinel result; Verify/approval test on JSON shape.
++
++## 5) Risks → Mitigations (tie to Risk Log)
++- **Secrets leakage** → gitleaks in CI; `.env.example` + docs; PR template includes “secrets check” tick box.
++- **Scope creep** (doing real FX/Shopify too early) → WP1 explicitly forbids production integrations.
++- **Inconsistent style** → Guidelines + analyzer gate in CI; devs run `dotnet format` (pre-commit optional).
++- **Regulatory spillover** → All executable code stays in **ZEN/**; docs/templates elsewhere.
++
++## 6) WP1 Task List (copy/paste into the main WP1)
++- [ ] Create solution + folders: `ZEN/SOURCE/{Core,Infrastructure,Api}` + `ZEN/TESTS`.
++- [ ] Add DI, Logging, Options binding; Health endpoints.
++- [ ] Introduce `IFxQuoteProvider` + NullFxQuoteProvider; wire to DI.
++- [ ] Add Supabase client registration (if env present) else log and continue.
++- [ ] Add Shopify client interface (no network calls).
++- [ ] Add canary tests + coverage.
++- [ ] Enable CI (build/test/analyzers/format), branch protection.
++- [ ] Update `GANTT` and log **stage gate** notes.
++
++## 7) Stage Gate (Go/No-Go)
++**Go** when: CI green + health endpoints pass + null FX path verified + Supabase optional path logs correctly + no secrets in repo.  
++**No-Go** when: any secret committed; tests missing; CI failing.
++
++---
++### Appendix A — Suggested folder layout (non-binding)
++```
++ZEN/
++  SOURCE/
++    SmartPay.Core/
++    SmartPay.Infrastructure/
++    SmartPay.Api/
++  TESTS/
++    SmartPay.Core.Tests/
++    SmartPay.Infrastructure.Tests/
++    SmartPay.Api.Tests/
++```
++
++### Appendix B — Minimal typed options example
++```csharp
++public sealed record SupabaseOptions
++{
++    public required string Url { get; init; }
++    public required string Key { get; init; }
++}
++```
++
++### Appendix C — Health endpoints (pseudo)
++`/health/live`  → app is up  
++`/health/ready` → deps ready (in WP1 this always returns 200; readiness for externals comes later)
++
+diff --git a/DOCS/Coding_Guidelines.md b/DOCS/Coding_Guidelines.md
+new file mode 100644
+index 0000000..b00b1e5
+--- /dev/null
++++ b/DOCS/Coding_Guidelines.md
+@@ -0,0 +1,220 @@
++# Coding Guidelines — RichMove.SmartPay
++
++> Purpose: keep ZEN code consistent, analyzable, and easy to reason about. This aligns with WP1 and CI.
++
++## Language & Tooling
++- **.NET**: 9 (LTS/RTM). `LangVersion=latest`, `Nullable=enable`, `ImplicitUsings=enable`.
++- **Namespaces**: file-scoped. Prefer records/primary constructors where appropriate.
++- **Analyzers**: `Microsoft.CodeAnalysis.NetAnalyzers`, `StyleCop.Analyzers`, `Meziantou.Analyzer` enabled; warnings as errors for analyzer rules.
++- **Formatting**: `dotnet format` locally; CI enforces.
++
++## Project structure (ZEN only)
++- `ZEN/SOURCE/*` contains all code; `ZEN/TESTS/*` contains all tests.
++- Public surface area minimal; internal by default. Avoid “god” utility classes.
++- Use **dependency injection** everywhere; configuration via typed options.
++
++## Exceptions, Results & Logging
++- Throw only for exceptional flows; return domain results for expected conditions.
++- Prefer `Try*` methods or a lightweight `Result<T>` pattern as needed.
++- Logging uses `Microsoft.Extensions.Logging`. Use structured logs; no string interpolation in log templates.
++
++## Async
++- Async suffix `*Async` for async methods; always pass `CancellationToken` for external I/O.
++- No `async void` except event handlers.
++
++## Naming & Style (summary)
++- `PascalCase` for types/methods/properties; `camelCase` for locals/parameters; `_camelCase` for private fields.
++- Use `var` when the type is evident on the right-hand side; otherwise explicit.
++- Expression-bodied members when they increase clarity.
++- Prefer pattern matching and `switch` expressions over long `if/else` ladders.
++
++## Validation
++- Guard clauses at the boundary. Return early on invalid input.
++- Use `ArgumentNullException.ThrowIfNull` and `ArgumentOutOfRangeException.ThrowIfNegativeOrZero` helpers where applicable.
++
++## Tests
++- `xUnit` + (optionally) `Verify.Xunit` for contract snapshots.
++- One “canary” test per project even in early WPs.
++- Keep tests deterministic; no network in unit tests.
++
++## Example — Generic setter pattern (agrees with user’s preference)
++```csharp
++public override bool Set<ResultType>(string tag, ResultType value)
++{
++    if (JsonObject is null) return false;
++    OnPropertyChanged(tag);
++
++    Type t = typeof(ResultType);
++    return t switch
++    {
++        _ when t == typeof(DateTime) && value is DateTime dt => SetDateTime(tag, dt),
++        _ when t == typeof(DateOnly) && value is DateOnly dl => SetDateOnly(tag, dl),
++        _ when t == typeof(decimal) && value is decimal dc => SetDecimal(tag, dc),
++        _ when t == typeof(bool) && value is bool bt => SetBool(tag, bt),
++        _ when t == typeof(string) && value is string st => SetString(tag, st),
++        _ when t == typeof(long) && value is long lon => SetLong(tag, lon),
++        _ when t == typeof(object) && value is object obj => SetObject(tag, obj),
++        _ when t.IsEnum && value is Enum enumData => SetEnum(tag, enumData),
++        _ => false
++    };
++}
++```
++
++## Minimal DI example
++```csharp
++builder.Services.AddOptions<SupabaseOptions>()
++       .Bind(builder.Configuration.GetSection("Supabase"))
++       .ValidateDataAnnotations()
++       .Validate(o => !string.IsNullOrWhiteSpace(o.Url) && !string.IsNullOrWhiteSpace(o.Key),
++                 "Supabase Url/Key are required");
++builder.Services.AddSingleton<IFxQuoteProvider, NullFxQuoteProvider>();
++```
++
++## Git & PR Hygiene
++- Conventional commit messages (`feat:`, `fix:`, `chore:` …).
++- No secrets; use `.env` locally and dev-safe config in CI.
++- Small PRs tied to WP commit points; each PR mentions **which DoD item** it satisfies.
++
++---
++> Keep this doc short; link out to deeper architecture notes from `DOCS/`.
++
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..c1a551e
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,86 @@
++name: ci
++on:
++  pull_request:
++  push:
++    branches: [ "master", "main" ]
++
++jobs:
++  build_test:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Setup .NET
++        uses: actions/setup-dotnet@v5
++        with:
++          dotnet-version: |
++            9.0.x
++      - name: Restore
++        run: dotnet restore
++      - name: Build (Release, warn as error)
++        run: dotnet build --configuration Release -warnaserror
++      - name: Format Check
++        run: dotnet format --verify-no-changes
++      - name: Test
++        run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage"
++      - name: Upload coverage (artifact)
++        uses: actions/upload-artifact@v4
++        if: always()
++        with:
++          name: coverage
++          path: |
++            **/TestResults/*/coverage.cobertura.xml
++            **/TestResults/*/coverage.xml
++  # Optional: secret scan to prevent accidents (gitleaks if present in repo)
++  # secret_scan:
++  #   runs-on: ubuntu-latest
++  #   steps:
++  #     - uses: actions/checkout@v4
++  #     - uses: gitleaks/gitleaks-action@v2
++  #       with:
++  #         args: detect --source . --no-git --redact
++
