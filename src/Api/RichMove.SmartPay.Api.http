@@ -1,0 +1,6 @@
+@RichMove.SmartPay.Api_HostAddress = http://localhost:5268
+
+GET {{RichMove.SmartPay.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

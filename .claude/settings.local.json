@@ -3,7 +3,12 @@
     "allow": [
       "Bash(git init:*)",
       "Bash(git remote add:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(dotnet new:*)",
+      "Bash(mkdir:*)",
+      "Bash(dotnet sln add:*)",
+      "Bash(dotnet build)",
+      "Bash(dotnet test)"
     ],
     "deny": [],
     "ask": []
