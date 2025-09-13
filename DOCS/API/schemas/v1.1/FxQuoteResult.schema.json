@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://richmove.co.uk/schemas/v1.1/FxQuoteResult",
+  "title": "FxQuoteResult v1.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rate", "baseCurrency", "quoteCurrency", "amount", "expiresAtUtc"],
+  "properties": {
+    "rate": { "type": "number", "minimum": 0 },
+    "baseCurrency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "quoteCurrency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+    "amount": { "type": "number", "minimum": 0 },
+    "fees": { "type": "number", "minimum": 0 },
+    "expiresAtUtc": { "type": "string", "format": "date-time" },
+    "provider": { "type": "string" }
+  }
+}

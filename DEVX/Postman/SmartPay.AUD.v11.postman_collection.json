@@ -1,0 +1,24 @@
+{
+  "info": {
+    "name": "RichMove SmartPay API — AUD v1.1",
+    "_postman_id": "3f5f0c29-2359-4a31-a33f-0c8b7c1a11aa",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "FX Quote AUD→EUR",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "demo-2359-aud-eur-1" }
+        ],
+        "url": "{{baseUrl}}/api/v1/fx/quote",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"baseCurrency\": \"AUD\",\n  \"quoteCurrency\": \"EUR\",\n  \"amount\": 2500.0\n}"
+        }
+      }
+    }
+  ]
+}

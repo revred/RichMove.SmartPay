@@ -1,0 +1,28 @@
+openapi: 3.0.3
+info:
+  title: RichMove SmartPay API — AUD Enablement Addendum
+  version: 1.0.0
+  description: |
+    This addendum documents AUD as a Tier‑1 currency and adds AUD↔AED examples.
+    Core contracts remain unchanged (3‑letter ISO codes).
+paths:
+  /api/v1/fx/quote:
+    post:
+      requestBody:
+        content:
+          application/json:
+            examples:
+              aud_to_aed:
+                summary: AUD→AED example
+                value:
+                  $ref: './examples/FxQuoteRequest.AUD_AED.example.json'
+      responses:
+        '200':
+          content:
+            application/json:
+              examples:
+                aud_to_aed:
+                  summary: AUD→AED result
+                  value:
+                    $ref: './examples/FxQuoteResult.AUD_AED.example.json'
+components: {}

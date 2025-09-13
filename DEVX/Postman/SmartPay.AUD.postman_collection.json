@@ -1,0 +1,21 @@
+{
+  "info": {
+    "name": "RichMove SmartPay API — AUD",
+    "_postman_id": "e6b1aa4c-aaaa-bbbb-cccc-2353audcorridor",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "FX Quote AUD→AED",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "url": "{{baseUrl}}/api/v1/fx/quote",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"baseCurrency\": \"AUD\",\n  \"quoteCurrency\": \"AED\",\n  \"amount\": 2500.0\n}"
+        }
+      }
+    }
+  ]
+}

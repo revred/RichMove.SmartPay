@@ -1,0 +1,9 @@
+{
+  "rate": 2.4201,
+  "baseCurrency": "AUD",
+  "quoteCurrency": "AED",
+  "amount": 2500.0,
+  "fees": 1.2,
+  "expiresAtUtc": "2025-09-30T23:59:59Z",
+  "provider": "NullFxProvider"
+}

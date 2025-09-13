@@ -1,0 +1,9 @@
+{
+  "rate": 0.61,
+  "baseCurrency": "AUD",
+  "quoteCurrency": "EUR",
+  "amount": 2500.0,
+  "fees": 1.3,
+  "expiresAtUtc": "2025-09-30T23:59:59Z",
+  "provider": "NullFxProvider"
+}

@@ -1,0 +1,87 @@
+openapi: 3.0.3
+info:
+  title: RichMove SmartPay API
+  version: 1.1.0
+  description: |
+    Non-breaking enrichment of v1.0: adds **AUD** examples and clarifies ProblemDetails patterns.
+servers:
+  - url: https://api.richmove.local
+paths:
+  /api/v1/health/live:
+    get:
+      summary: Liveness probe
+      responses:
+        '200': { description: OK }
+  /api/v1/health/ready:
+    get:
+      summary: Readiness probe
+      responses:
+        '200': { description: Ready }
+        '503': { description: Not Ready }
+  /api/v1/fx/quote:
+    post:
+      summary: Get an indicative FX quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxQuoteRequest'
+            examples:
+              gbp_to_eur:
+                summary: GBP→EUR
+                value:
+                  baseCurrency: GBP
+                  quoteCurrency: EUR
+                  amount: 1000
+              aud_to_eur:
+                summary: AUD→EUR (new Tier‑1 example)
+                value:
+                  baseCurrency: AUD
+                  quoteCurrency: EUR
+                  amount: 2500
+      responses:
+        '200':
+          description: Quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxQuoteResult'
+              examples:
+                aud_to_eur:
+                  summary: AUD→EUR response
+                  value:
+                    rate: 0.61
+                    baseCurrency: AUD
+                    quoteCurrency: EUR
+                    amount: 2500
+                    fees: 1.3
+                    expiresAtUtc: "2025-09-30T23:59:59Z"
+                    provider: "NullFxProvider"
+        '400': { description: Validation error (RFC7807) }
+        '409': { description: Idempotency conflict (RFC7807) }
+        '501': { description: Feature disabled (RFC7807) }
+components:
+  schemas:
+    FxQuoteRequest:
+      type: object
+      additionalProperties: false
+      required: [baseCurrency, quoteCurrency, amount]
+      properties:
+        baseCurrency: { type: string, pattern: '^[A-Z]{3}$' }
+        quoteCurrency: { type: string, pattern: '^[A-Z]{3}$' }
+        amount: { type: number, minimum: 0.01 }
+        clientId: { type: string, maxLength: 64 }
+        correlationId: { type: string, maxLength: 64 }
+    FxQuoteResult:
+      type: object
+      additionalProperties: false
+      required: [rate, baseCurrency, quoteCurrency, amount, expiresAtUtc]
+      properties:
+        rate: { type: number, minimum: 0 }
+        baseCurrency: { type: string, pattern: '^[A-Z]{3}$' }
+        quoteCurrency: { type: string, pattern: '^[A-Z]{3}$' }
+        amount: { type: number, minimum: 0 }
+        fees: { type: number, minimum: 0 }
+        expiresAtUtc: { type: string, format: date-time }
+        provider: { type: string }

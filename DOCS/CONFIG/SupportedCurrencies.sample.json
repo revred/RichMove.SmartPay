@@ -1,0 +1,11 @@
+{
+  "supportedCurrencies": [
+    "GBP",
+    "EUR",
+    "USD",
+    "INR",
+    "AUD",
+    "AED",
+    "CAD"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "baseCurrency": "AUD",
+  "quoteCurrency": "AED",
+  "amount": 2500.00,
+  "clientId": "aud-corridor-demo",
+  "correlationId": "corr-2353-aud-aed"
+}
