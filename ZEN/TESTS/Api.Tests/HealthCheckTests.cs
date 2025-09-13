@@ -5,11 +5,11 @@ using System.Net;
 namespace RichMove.SmartPay.Api.Tests;
 
 #pragma warning disable CA1707, CA2234, CA2007
-public class HealthCheckTests : IClassFixture<WebApplicationFactory<Program>>
+public class HealthCheckTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
 
-    public HealthCheckTests(WebApplicationFactory<Program> factory)
+    public HealthCheckTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
     }

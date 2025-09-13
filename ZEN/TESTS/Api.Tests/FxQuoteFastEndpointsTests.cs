@@ -6,11 +6,11 @@ using FluentAssertions;
 namespace RichMove.SmartPay.Api.Tests;
 
 #pragma warning disable CA1707, CA2234, CA2007
-public sealed class FxQuoteFastEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class FxQuoteFastEndpointsTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
 
-    public FxQuoteFastEndpointsTests(WebApplicationFactory<Program> factory) => _factory = factory;
+    public FxQuoteFastEndpointsTests(TestWebApplicationFactory factory) => _factory = factory;
 
     [Fact]
     public async Task Post_Quotes_Returns_200_With_Valid_Input()

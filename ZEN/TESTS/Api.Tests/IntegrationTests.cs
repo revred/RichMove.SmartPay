@@ -8,11 +8,11 @@ using RichMove.SmartPay.Core.ForeignExchange;
 namespace RichMove.SmartPay.Api.Tests;
 
 #pragma warning disable CA1707, CA2234, CA2007
-public class IntegrationTests : IClassFixture<WebApplicationFactory<Program>>
+public class IntegrationTests : IClassFixture<TestWebApplicationFactory>
 {
-    private readonly WebApplicationFactory<Program> _factory;
+    private readonly TestWebApplicationFactory _factory;
 
-    public IntegrationTests(WebApplicationFactory<Program> factory)
+    public IntegrationTests(TestWebApplicationFactory factory)
     {
         _factory = factory;
     }

@@ -2,8 +2,11 @@ using RichMove.SmartPay.Core.ForeignExchange;
 using RichMove.SmartPay.Core.Integrations;
 using RichMove.SmartPay.Infrastructure.ForeignExchange;
 using RichMove.SmartPay.Infrastructure.Integrations;
+using RichMove.SmartPay.Infrastructure.Blockchain;
+using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
 using FastEndpoints;
 using FastEndpoints.Swagger;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,7 +21,36 @@ builder.Services.AddSingleton<IShopifyClient, NullShopifyClient>();
 
 builder.Services.AddHealthChecks();
 
-// FastEndpoints configuration
+// === Blockchain feature flag and services (isolated) ===
+builder.Services.AddSingleton<IBlockchainGate, BlockchainGate>();
+
+var supabaseConnectionString = builder.Configuration.GetConnectionString("Supabase") ??
+    builder.Configuration["Supabase:DbConnectionString"];
+var blockchainEnabled = string.Equals(builder.Configuration["Blockchain:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+
+if (!string.IsNullOrEmpty(supabaseConnectionString) && blockchainEnabled)
+{
+    builder.Services.AddSingleton<NpgsqlDataSource>(provider =>
+    {
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(supabaseConnectionString);
+        return dataSourceBuilder.Build();
+    });
+
+    builder.Services.AddSingleton<WalletRepository>();
+    builder.Services.AddSingleton<IntentRepository>();
+    builder.Services.AddSingleton<TxRepository>();
+}
+else
+{
+    // Register stub repositories when blockchain is disabled
+    // These won't be called since endpoints check the gate first, but are needed for DI
+    builder.Services.AddSingleton<WalletRepository>(_ => new WalletRepository(null));
+    builder.Services.AddSingleton<IntentRepository>(_ => new IntentRepository(null));
+    builder.Services.AddSingleton<TxRepository>(_ => new TxRepository(null));
+}
+
+// FastEndpoints configuration - always register all endpoints
+// The blockchain endpoints handle disabled state internally via IBlockchainGate
 builder.Services.AddFastEndpoints();
 builder.Services.SwaggerDocument();
 
