@@ -5,10 +5,10 @@ setup:
 	@dotnet tool restore || true
 
 test:
-	dotnet test --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+	dotnet test RichMove.SmartPay.sln --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
 
 mutation:
-	dotnet stryker --config-file tests/RichMove.SmartPay.MutationTests/stryker-config.json
+	dotnet stryker --config-file stryker-config.json
 
 contract:
 	docker run --rm --network host schemathesis/schemathesis:stable run http://localhost:8080/swagger/v1/swagger.json --checks all --rate-limit=50

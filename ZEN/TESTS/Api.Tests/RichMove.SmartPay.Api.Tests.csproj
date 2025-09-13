@@ -17,12 +17,13 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="FluentAssertions" />
     <PackageReference Include="NSubstitute" />
-    <PackageReference Include="FsCheck" />
-    <PackageReference Include="FsCheck.Xunit" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Testcontainers" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Core\RichMove.SmartPay.Core.csproj" />
+    <ProjectReference Include="..\..\SOURCE\Api\RichMove.SmartPay.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

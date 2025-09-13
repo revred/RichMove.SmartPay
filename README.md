@@ -12,7 +12,10 @@ with **20% effort** focus via strict scope and partner-led regulated flows.
 - `WPS/` — Detailed Work Packages (features, tasks, commit points, regression tests).
 - `REGULATORY/` — SPI application & partner onboarding checklists; document templates.
 - `DOCS/` — Architecture, API skeleton, diagrams.
-- `TESTS/` — Regression plans, security & load testing plans.
+- `ZEN/` — **All source code and build files** (clean development environment).
+  - `SOURCE/` — Core, Infrastructure, and API projects (.NET 9).
+  - `TESTS/` — Unit, integration, and load test projects.
+  - Build files: `*.sln`, `Directory.*.props`, `global.json`, etc.
 - `COMMERCIAL/` — Pricing & unit-economics, partner & investor one-pagers.
 - `GANTT/` — Mermaid + CSV task plan for import into PM tools.
 - `SCRIPTS/` — Helpers (branch creation, release checklist).

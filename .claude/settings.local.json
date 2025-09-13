@@ -8,7 +8,12 @@
       "Bash(mkdir:*)",
       "Bash(dotnet sln add:*)",
       "Bash(dotnet build)",
-      "Bash(dotnet test)"
+      "Bash(dotnet test)",
+      "Bash(git commit:*)",
+      "Bash(git mv:*)",
+      "Bash(awk:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)"
     ],
     "deny": [],
     "ask": []

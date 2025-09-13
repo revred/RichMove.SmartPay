@@ -3,19 +3,19 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SOURCE", "SOURCE", "{827E0CD3-B72D-47B6-A68D-7590B98EB39B}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Core", "Core", "{8D626EA8-CB54-BC41-363A-217881BEBA6E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Core", "src\Core\RichMove.SmartPay.Core.csproj", "{3CB53289-59C4-4296-974C-0DE13E73680E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Core", "SOURCE\Core\RichMove.SmartPay.Core.csproj", "{3CB53289-59C4-4296-974C-0DE13E73680E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Infrastructure", "src\Infrastructure\RichMove.SmartPay.Infrastructure.csproj", "{CF5EB003-2979-4C56-AE80-A285B916CA0A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Infrastructure", "SOURCE\Infrastructure\RichMove.SmartPay.Infrastructure.csproj", "{CF5EB003-2979-4C56-AE80-A285B916CA0A}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Api", "src\Api\RichMove.SmartPay.Api.csproj", "{1EF7DE5B-0BB5-464C-922B-99B6AE60F7EF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Api", "SOURCE\Api\RichMove.SmartPay.Api.csproj", "{1EF7DE5B-0BB5-464C-922B-99B6AE60F7EF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Core.Tests", "tests\Core.Tests\RichMove.SmartPay.Core.Tests.csproj", "{F8446FAE-8BCC-4E2B-B4C0-28EE41796EF7}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Core.Tests", "TESTS\Core.Tests\RichMove.SmartPay.Core.Tests.csproj", "{F8446FAE-8BCC-4E2B-B4C0-28EE41796EF7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Api.Tests", "tests\Api.Tests\RichMove.SmartPay.Api.Tests.csproj", "{1CA71C33-6BE9-4CA7-A5B0-A819122E5822}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RichMove.SmartPay.Api.Tests", "TESTS\Api.Tests\RichMove.SmartPay.Api.Tests.csproj", "{1CA71C33-6BE9-4CA7-A5B0-A819122E5822}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

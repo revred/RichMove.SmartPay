@@ -1,7 +1,7 @@
 {
   "stryker-config": {
     "project": "RichMove.SmartPay.Core.csproj",
-    "test-projects": ["./tests/Core.Tests/RichMove.SmartPay.Core.Tests.csproj"],
+    "test-projects": ["./TESTS/Core.Tests/RichMove.SmartPay.Core.Tests.csproj"],
     "reporters": ["html", "progress", "dashboard"],
     "mutation-level": "Complete",
     "threshold-high": 95,
@@ -9,9 +9,9 @@
     "threshold-break": 85,
     "coverage-analysis": "perTest",
     "mutate": [
-      "src/Core/**/*.cs",
-      "!src/Core/**/Program.cs",
-      "!src/Core/**/Migrations/*.cs"
+      "SOURCE/Core/**/*.cs",
+      "!SOURCE/Core/**/Program.cs",
+      "!SOURCE/Core/**/Migrations/*.cs"
     ],
     "dashboard-project": "github.com/revred/RichMove.SmartPay",
     "dashboard-version": "master",
