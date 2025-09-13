@@ -1,17 +1,136 @@
 openapi: 3.1.0
 info:
-  title: RichMove.SmartPay
-  version: 0.1.0
+  title: RichMove.SmartPay API
+  description: |
+    Payment orchestration platform with FX remittance capabilities.
+
+    **Operating Model**: Orchestration-first approach using regulated partners:
+    - Cards/A2A/wallets via Stripe, TrueLayer, PayPal
+    - FX & remittance under SPI (Small Payment Institution) license
+    - Focus on API, UX, analytics while partners handle regulated flows
+
+    Project conceived and specified by Ram Revanur.
+  version: 1.0.0-alpha
+  contact:
+    name: RichMove.SmartPay Support
+    url: https://github.com/revred/RichMove.SmartPay
+  license:
+    name: Proprietary
+
+servers:
+  - url: https://api.richmove.smartpay.com/v1
+    description: Production API
+  - url: https://sandbox-api.richmove.smartpay.com/v1
+    description: Sandbox environment
+
 paths:
+  /:
+    get:
+      summary: Service information
+      description: Returns basic service information and health status
+      operationId: getServiceInfo
+      responses:
+        '200':
+          description: Service information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service:
+                    type: string
+                    example: "RichMove.SmartPay"
+                  version:
+                    type: string
+                    example: "1.0.0"
+                  status:
+                    type: string
+                    example: "operational"
+                  description:
+                    type: string
+                    example: "Payment orchestration platform conceived and specified by Ram Revanur"
+
+  /health:
+    get:
+      summary: Health check
+      description: Returns the health status of the API
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Healthy"
+
+  # Future endpoints (WP3-WP6 implementation)
   /v1/quotes:
     post:
       summary: Create FX quote
-      responses: { '200': { description: OK } }
+      description: Generate a foreign exchange quote for payment processing
+      operationId: createFxQuote
+      responses:
+        '200':
+          description: FX quote created successfully
+        '400':
+          description: Invalid request parameters
+        '429':
+          description: Rate limit exceeded
+
   /v1/payments:
     post:
       summary: Create payment
-      responses: { '200': { description: OK } }
-  /v1/providers/{name}/webhook:
+      description: Process a payment through the orchestration engine
+      operationId: createPayment
+      responses:
+        '201':
+          description: Payment created successfully
+        '400':
+          description: Invalid payment request
+        '422':
+          description: Payment validation failed
+
+  /v1/providers/{provider}/webhook:
     post:
-      summary: Provider webhook
-      responses: { '200': { description: OK } }
+      summary: Provider webhook endpoint
+      description: Receive webhooks from payment providers (Stripe, TrueLayer, PayPal)
+      operationId: providerWebhook
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [stripe, truelayer, paypal]
+      responses:
+        '200':
+          description: Webhook processed successfully
+        '400':
+          description: Invalid webhook payload
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+tags:
+  - name: health
+    description: Health and monitoring endpoints
+  - name: payments
+    description: Payment processing operations
+  - name: fx
+    description: Foreign exchange operations
+  - name: webhooks
+    description: Provider webhook handlers
