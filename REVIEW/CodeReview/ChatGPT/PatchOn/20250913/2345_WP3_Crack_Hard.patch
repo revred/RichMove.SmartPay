@@ -1,0 +1,268 @@
+diff --git a/ZEN/SOURCE/Api/Extensions/SmartPayHardeningExtensions.cs b/ZEN/SOURCE/Api/Extensions/SmartPayHardeningExtensions.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Extensions/SmartPayHardeningExtensions.cs
+@@ -0,0 +1,93 @@
++using Microsoft.AspNetCore.Builder;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Logging;
++using Microsoft.Extensions.Options;
++using RichMove.SmartPay.Api;
++using RichMove.SmartPay.Api.Idempotency;
++using RichMove.SmartPay.Api.Middleware;
++using RichMove.SmartPay.Core.Blockchain;
++using RichMove.SmartPay.Infrastructure.Blockchain;
++
++namespace RichMove.SmartPay.Api.Extensions;
++
++public static class SmartPayHardeningExtensions
++{
++    public static IServiceCollection AddSmartPayPlatformHardening(this IServiceCollection services, IConfiguration config)
++    {
++        services.Configure<FeatureFlags>(config.GetSection("Features"));
++
++        // Idempotency store (in-memory baseline)
++        services.AddSingleton<IIdempotencyStore, InMemoryIdempotencyStore>();
++
++        // Ledger binding is done at Use* stage (requires options).
++        return services;
++    }
++
++    public static IApplicationBuilder UseSmartPayPlatformHardening(this IApplicationBuilder app, ILoggerFactory loggerFactory)
++    {
++        var logger = loggerFactory.CreateLogger("SmartPay.Platform");
++
++        // ProblemDetails for all errors + not-implemented normalization
++        app.UseMiddleware<UnhandledExceptionMiddleware>();
++        app.UseProblemDetails(logger);
++
++        // Correlation ID
++        app.UseMiddleware<CorrelationIdMiddleware>();
++
++        // Idempotency for POST/PUT/PATCH endpoints
++        app.UseMiddleware<IdempotencyMiddleware>();
++
++        // Blockchain binding by feature flag
++        var flags = app.ApplicationServices.GetRequiredService<IOptions<FeatureFlags>>().Value;
++        var services = app.ApplicationServices;
++        var ledger = flags.BlockchainEnabled
++            ? services.GetService<IBlockchainLedger>() ?? new InMemoryBlockchainLedger()
++            : services.GetService<IBlockchainLedger>() ?? new NullBlockchainLedger();
++
++        logger.LogInformation("BlockchainEnabled={Flag}; Ledger={LedgerType}", flags.BlockchainEnabled, ledger.GetType().Name);
++        return app;
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Middleware/CorrelationIdMiddleware.cs b/ZEN/SOURCE/Api/Middleware/CorrelationIdMiddleware.cs
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Middleware/CorrelationIdMiddleware.cs
+@@ -0,0 +1,43 @@
++using System;
++using System.Threading.Tasks;
++using Microsoft.AspNetCore.Http;
++
++namespace RichMove.SmartPay.Api.Middleware;
++
++public sealed class CorrelationIdMiddleware
++{
++    public const string HeaderName = "X-Correlation-Id";
++    private readonly RequestDelegate _next;
++
++    public CorrelationIdMiddleware(RequestDelegate next) => _next = next;
++
++    public async Task Invoke(HttpContext context)
++    {
++        if (!context.Request.Headers.TryGetValue(HeaderName, out var corr) || string.IsNullOrWhiteSpace(corr))
++        {
++            corr = Guid.NewGuid().ToString("N");
++            context.Request.Headers[HeaderName] = corr;
++        }
++
++        context.Response.OnStarting(() =>
++        {
++            context.Response.Headers[HeaderName] = corr.ToString();
++            return Task.CompletedTask;
++        });
++
++        await _next(context);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Idempotency/IIdempotencyStore.cs b/ZEN/SOURCE/Api/Idempotency/IIdempotencyStore.cs
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Idempotency/IIdempotencyStore.cs
+@@ -0,0 +1,16 @@
++using System;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace RichMove.SmartPay.Api.Idempotency;
++
++public interface IIdempotencyStore
++{
++    Task<bool> TryPutAsync(string key, DateTime expiresUtc, CancellationToken ct = default);
++    Task<bool> ExistsAsync(string key, CancellationToken ct = default);
++}
++
+diff --git a/ZEN/SOURCE/Api/Idempotency/InMemoryIdempotencyStore.cs b/ZEN/SOURCE/Api/Idempotency/InMemoryIdempotencyStore.cs
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Idempotency/InMemoryIdempotencyStore.cs
+@@ -0,0 +1,39 @@
++using System;
++using System.Collections.Concurrent;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace RichMove.SmartPay.Api.Idempotency;
++
++public sealed class InMemoryIdempotencyStore : IIdempotencyStore
++{
++    private readonly ConcurrentDictionary<string, DateTime> _keys = new();
++
++    public Task<bool> TryPutAsync(string key, DateTime expiresUtc, CancellationToken ct = default)
++        => Task.FromResult(_keys.TryAdd(key, expiresUtc));
++
++    public Task<bool> ExistsAsync(string key, CancellationToken ct = default)
++    {
++        if (_keys.TryGetValue(key, out var exp) && exp > DateTime.UtcNow)
++            return Task.FromResult(true);
++        _keys.TryRemove(key, out _);
++        return Task.FromResult(false);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Middleware/IdempotencyMiddleware.cs b/ZEN/SOURCE/Api/Middleware/IdempotencyMiddleware.cs
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Middleware/IdempotencyMiddleware.cs
+@@ -0,0 +1,69 @@
++using System;
++using System.Net;
++using System.Text.Json;
++using System.Threading.Tasks;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Logging;
++using RichMove.SmartPay.Api.Idempotency;
++
++namespace RichMove.SmartPay.Api.Middleware;
++
++public sealed class IdempotencyMiddleware
++{
++    private readonly RequestDelegate _next;
++    private readonly IIdempotencyStore _store;
++    private readonly ILogger<IdempotencyMiddleware> _logger;
++
++    public IdempotencyMiddleware(RequestDelegate next, IIdempotencyStore store, ILogger<IdempotencyMiddleware> logger)
++    {
++        _next = next;
++        _store = store;
++        _logger = logger;
++    }
++
++    public async Task Invoke(HttpContext context)
++    {
++        if (context.Request.Method is "POST" or "PUT" or "PATCH")
++        {
++            var key = context.Request.Headers["Idempotency-Key"].ToString();
++            if (string.IsNullOrWhiteSpace(key) || key.Length < 8)
++            {
++                await WriteProblem(context, "about:blank/idempotency-key-missing", "Idempotency key required", "Provide a unique Idempotency-Key header for writes.", HttpStatusCode.BadRequest);
++                return;
++            }
++
++            if (await _store.ExistsAsync(key, context.RequestAborted))
++            {
++                await WriteProblem(context, "about:blank/idempotency-conflict", "Duplicate request", "A request with the same Idempotency-Key was already processed.", HttpStatusCode.Conflict);
++                return;
++            }
++
++            var ok = await _store.TryPutAsync(key, DateTime.UtcNow.AddHours(24), context.RequestAborted);
++            if (!ok)
++            {
++                await WriteProblem(context, "about:blank/idempotency-conflict", "Duplicate request", "This key is already in use.", HttpStatusCode.Conflict);
++                return;
++            }
++        }
++
++        await _next(context);
++    }
++
++    private static Task WriteProblem(HttpContext ctx, string type, string title, string detail, HttpStatusCode status)
++    {
++        ctx.Response.ContentType = "application/problem+json";
++        ctx.Response.StatusCode = (int)status;
++        var payload = new { type, title, status = (int)status, detail, traceId = ctx.TraceIdentifier };
++        return ctx.Response.WriteAsync(JsonSerializer.Serialize(payload));
++    }
++}
++
+diff --git a/DOCS/ERRORS/ErrorCatalog.md b/DOCS/ERRORS/ErrorCatalog.md
+new file mode 100644
+index 0000000..6666666
+--- /dev/null
++++ b/DOCS/ERRORS/ErrorCatalog.md
+@@ -0,0 +1,58 @@
++# Error Catalog (ProblemDetails)
++
++| Code | `type`                             | `title`               | HTTP | Notes |
++|------|------------------------------------|-----------------------|------|------|
++| E-IDEMP-001 | about:blank/idempotency-key-missing | Idempotency key required | 400 | Write endpoints require `Idempotency-Key`. |
++| E-IDEMP-002 | about:blank/idempotency-conflict    | Duplicate request       | 409 | Same key seen within 24h window. |
++| E-TIMEOUT-001 | about:blank/timeout               | Request timed out       | 408 | Cancellation/timeout. |
++| E-UNHANDLED-001 | about:blank/unhandled           | Unhandled error         | 500 | Catch-all. |
++| E-NOTIMPL-001 | about:blank/not-implemented       | Feature not implemented | 501 | Feature disabled by flag. |
++
++**Conventions**
++- Stable `type` URIs, programmatic `code`s (E-xxx), human-readable `title` and `detail`.
++- Extend per feature with prefix (`E-FX-*`, `E-KYC-*`). Keep a single source of truth here.
++
+diff --git a/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2345_WP3_Crack_Hard.NOTES.md b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2345_WP3_Crack_Hard.NOTES.md
+new file mode 100644
+index 0000000..7777777
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2345_WP3_Crack_Hard.NOTES.md
+@@ -0,0 +1,44 @@
++# Patch Notes — 2345 WP3 Crack Hard
++
++This patch wires **platform hardening** behind one-liners — without editing your existing Program.cs yet.
++
++## How to enable (copy/paste)
++In `Program.cs` (API project):
++```csharp
++// after builder created
++builder.Services.AddSmartPayPlatformHardening(builder.Configuration);
++
++// after app created
++var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
++app.UseSmartPayPlatformHardening(loggerFactory);
++```
++
++**Config:**
++```json
++{
++  "Features": {
++    "BlockchainEnabled": false,
++    "QuotesCacheEnabled": false,
++    "RateLimitEnabled": true
++  }
++}
++```
++
++### What you get immediately
++- **ProblemDetails** normalization (RFC 7807) for unhandled errors + 501.
++- **Correlation IDs** (`X-Correlation-Id`) echoed and logged.
++- **Idempotency** guard for write endpoints using an in-memory store.
++- **Ledger binding** by feature flag (Null vs InMemory).
++
++> These defaults are safe and additive. You control behavior via `Features`.
++

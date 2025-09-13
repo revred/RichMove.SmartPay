@@ -1,0 +1,9 @@
+{
+  "rate": 1.1612,
+  "baseCurrency": "GBP",
+  "quoteCurrency": "EUR",
+  "amount": 1250.50,
+  "fees": 0.90,
+  "expiresAtUtc": "2025-09-13T23:59:59Z",
+  "provider": "NullFxProvider"
+}

@@ -1,0 +1,7 @@
+{
+  "baseCurrency": "GBP",
+  "quoteCurrency": "EUR",
+  "amount": 1250.50,
+  "clientId": "demo-client",
+  "correlationId": "abc-123-demo"
+}

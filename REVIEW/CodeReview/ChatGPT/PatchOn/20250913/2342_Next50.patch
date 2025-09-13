@@ -1,0 +1,353 @@
+diff --git a/REVIEW/CodeReview/ChatGPT/TopN/20250913/2342_NEXT50.md b/REVIEW/CodeReview/ChatGPT/TopN/20250913/2342_NEXT50.md
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/TopN/20250913/2342_NEXT50.md
+@@ -0,0 +1,262 @@
++# Next 50 impact moves (items 51–100)
++
++> Complements 2328_TOP50.md. Focus is depth: operability, DX, compliance, and partner-readiness.
++
++## I. Contracts & Consumer DX
++51. **SDKs**: Publish minimal TS + C# SDKs with typed clients, retries, and ProblemDetails mapping.
++52. **Postman collection + envs** checked in (`DEVX/Postman`); keep examples in sync with OpenAPI.
++53. **Example payloads**: goldens for each schema in `DOCS/API/examples/*.json`.
++54. **OpenAPI examples**: embed examples + `x-codeSamples` for curl/TS/C#.
++55. **Semantic error codes**: finalize `DOCS/ERRORS/ErrorCatalog.md` and reference in OpenAPI `responses`.
++56. **Webhooks**: document webhook contracts for async events with signing & replay protection.
++57. **Client idempotency helper**: SDK helper to auto-set `Idempotency-Key` and cache 409/200 results.
++58. **Pagination rel-links**: add `Link` headers (`next`, `prev`, `first`, `last`), document limits.
++59. **E2E examples**: “Convert GBP→EUR then emit receipt” happy path; and 3 failure paths in docs.
++60. **Try-it page**: a single-file HTML that calls `/api/v1/fx/quote` for dev verification (no deps).
++
++## II. Security, Privacy, and Compliance
++61. **PII data map**: table of fields, purpose, retention, encryption-at-rest, lawful basis.
++62. **GDPR requests**: DSAR/erasure process in `DOCS/PRIVACY/DSAR.md` + API endpoints considered.
++63. **Key rotation runbook**: clear steps for rotating signing/encryption keys; blast-radius analysis.
++64. **Provider allowlist**: outbound egress locked to provider IP/CIDRs; doc’d exceptions.
++65. **Audit trail policy**: how long we keep conversions, receipts, API access logs; retention job.
++66. **WAF/DoS posture**: document controls (rate-limit tiers, IP throttling, geo blocks).
++67. **SSRF hardening**: ensure no user-provided URLs are fetched; if needed, use safelist + HEAD only.
++68. **JWT scopes**: if/when auth enters, define app vs. partner scopes and minimum privileges.
++69. **Secrets inventory**: catalogue secrets + owners + rotation cadence in `SECURITY/Secrets.md`.
++70. **CodeQL**: add CodeQL workflow for C# + TS paths; triage SLA for findings.
++
++## III. Reliability & Cost
++71. **SLOs + error budgets**: publish `DOCS/OPS/SLOs.md` with 99.9%/99.5% targets; define burn alerts.
++72. **Synthetic monitors**: `/health/ready` & a single quote flow; run from 3 regions.
++73. **Cold start budget**: measure and set max cold-start time for API container.
++74. **Cost observability**: tag providers calls with `cost.*` hints; monthly report markdown.
++75. **Backpressure**: admission control for expensive endpoints under load; 429 with `Retry-After`.
++76. **Chaos drills**: quarterly “provider outage” game day; runbook links.
++77. **Retry taxonomy**: classify errors as retryable vs fatal; document timeouts per provider.
++78. **Cache keys**: canonicalize currency pair + amount to avoid cache poisoning.
++79. **Decimal safety**: common money type using `decimal` with explicit rounding contexts.
++80. **Concurrency limits**: per-API async semaphore to bound in-flight work; metrics exposed.
++
++## IV. Data & Storage
++81. **Canonical store**: define a neutral `Conversions` table (even if not implemented yet).
++82. **Schema migrations**: migration folder with idempotent scripts + gate in CI.
++83. **Data retention job**: time-based deletes for PII; documented in runbooks.
++84. **Checksum strategy**: stable canonical JSON rules (sorted keys, decimals, ISO8601).
++85. **Event versioning**: `type@vN` pattern; consumers must accept N and N-1.
++86. **Export API**: NDJSON export for audits; guarded, rate-limited, and scoped.
++90. **Golden rounding**: codify fee + rounding rules via approval tests & golden files.
++
++## V. Build, CI/CD & Repo Hygiene
++91. **Conventional commits** + **semantic-release** strategy; auto-version SDKs.
++92. **CODEOWNERS**: enforce reviewers for Core, API, Docs.
++93. **PR template**: risk, test plan, screenshots, toggles touched.
++94. **Renovate**: automated dependency PRs with grouping rules.
++95. **Verified builds**: record dotnet/Node versions in `DEVX/Toolchain.md`.
++96. **Makefile**: unify common tasks (`test`, `lint`, `bench`, `docs`, `contracts`).
++97. **Docs site**: GitHub Pages (mkdocs/docusaurus) pointer; single landing `DOCS/README.md`.
++98. **Diagrams as code**: standardize Mermaid/PlantUML; export on CI.
++99. **Pre-commit hooks**: formatting, secrets-scan, OpenAPI lint locally.
++100. **Monorepo folders**: confirm layout (`ZEN/SOURCE`, `ZEN/TESTS`, `DOCS`, `WPS`, `REVIEW`, `SECURITY`, `DEVX`).
++
++---
++**Note:** This file is advisory. Additional scaffolding included in this patch helps execute several items above without changing runtime behavior.
++
+diff --git a/DOCS/API/schemas/FxQuoteRequest.schema.json b/DOCS/API/schemas/FxQuoteRequest.schema.json
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/DOCS/API/schemas/FxQuoteRequest.schema.json
+@@ -0,0 +1,49 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://richmove.co.uk/schemas/FxQuoteRequest.schema.json",
++  "title": "FxQuoteRequest",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["baseCurrency", "quoteCurrency", "amount"],
++  "properties": {
++    "baseCurrency": {
++      "type": "string",
++      "pattern": "^[A-Z]{3}$"
++    },
++    "quoteCurrency": {
++      "type": "string",
++      "pattern": "^[A-Z]{3}$"
++    },
++    "amount": {
++      "type": "number",
++      "minimum": 0.01
++    },
++    "clientId": {
++      "type": "string",
++      "maxLength": 64
++    },
++    "correlationId": {
++      "type": "string",
++      "maxLength": 64
++    }
++  }
++}
++
+diff --git a/DOCS/API/schemas/FxQuoteResult.schema.json b/DOCS/API/schemas/FxQuoteResult.schema.json
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/DOCS/API/schemas/FxQuoteResult.schema.json
+@@ -0,0 +1,47 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$id": "https://richmove.co.uk/schemas/FxQuoteResult.schema.json",
++  "title": "FxQuoteResult",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["rate", "baseCurrency", "quoteCurrency", "amount", "expiresAtUtc"],
++  "properties": {
++    "rate": { "type": "number", "minimum": 0 },
++    "baseCurrency": { "type": "string", "pattern": "^[A-Z]{3}$" },
++    "quoteCurrency": { "type": "string", "pattern": "^[A-Z]{3}$" },
++    "amount": { "type": "number", "minimum": 0 },
++    "fees": { "type": "number", "minimum": 0 },
++    "expiresAtUtc": { "type": "string", "format": "date-time" },
++    "provider": { "type": "string" }
++  }
++}
++
+diff --git a/DOCS/API/examples/FxQuoteRequest.example.json b/DOCS/API/examples/FxQuoteRequest.example.json
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/DOCS/API/examples/FxQuoteRequest.example.json
+@@ -0,0 +1,9 @@
++{
++  "baseCurrency": "GBP",
++  "quoteCurrency": "EUR",
++  "amount": 1250.50,
++  "clientId": "demo-client",
++  "correlationId": "abc-123-demo"
++}
++
+diff --git a/DOCS/API/examples/FxQuoteResult.example.json b/DOCS/API/examples/FxQuoteResult.example.json
+new file mode 100644
+index 0000000..6666666
+--- /dev/null
++++ b/DOCS/API/examples/FxQuoteResult.example.json
+@@ -0,0 +1,11 @@
++{
++  "rate": 1.1612,
++  "baseCurrency": "GBP",
++  "quoteCurrency": "EUR",
++  "amount": 1250.5,
++  "fees": 0.9,
++  "expiresAtUtc": "2025-09-13T23:59:59Z",
++  "provider": "NullFxProvider"
++}
++
+diff --git a/DEVX/Postman/SmartPay.postman_collection.json b/DEVX/Postman/SmartPay.postman_collection.json
+new file mode 100644
+index 0000000..7777777
+--- /dev/null
++++ b/DEVX/Postman/SmartPay.postman_collection.json
+@@ -0,0 +1,63 @@
++{
++  "info": {
++    "name": "RichMove SmartPay API",
++    "_postman_id": "e6b1aa4c-1111-2222-3333-444455556666",
++    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
++  },
++  "item": [
++    {
++      "name": "Health - Live",
++      "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/health/live" }
++    },
++    {
++      "name": "Health - Ready",
++      "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/health/ready" }
++    },
++    {
++      "name": "FX Quote",
++      "request": {
++        "method": "POST",
++        "header": [ { "key": "Content-Type", "value": "application/json" } ],
++        "url": "{{baseUrl}}/api/v1/fx/quote",
++        "body": {
++          "mode": "raw",
++          "raw": "{\n  \"baseCurrency\": \"GBP\",\n  \"quoteCurrency\": \"EUR\",\n  \"amount\": 1250.5\n}"
++        }
++      }
++    }
++  ]
++}
++
+diff --git a/.github/release-drafter.yml b/.github/release-drafter.yml
+new file mode 100644
+index 0000000..8888888
+--- /dev/null
++++ b/.github/release-drafter.yml
+@@ -0,0 +1,26 @@
++name-template: 'v$NEXT_PATCH_VERSION'
++tag-template: 'v$NEXT_PATCH_VERSION'
++categories:
++  - title: '🚀 Features'
++    labels: ['feature', 'enhancement']
++  - title: '🐛 Fixes'
++    labels: ['fix', 'bug']
++  - title: '🧰 Maintenance'
++    labels: ['chore', 'deps']
++change-template: '- $TITLE (#$NUMBER) @$AUTHOR'
++template: |
++  ## What’s changed
++  $CHANGES
++
+diff --git a/.github/PULL_REQUEST_TEMPLATE.md b/.github/PULL_REQUEST_TEMPLATE.md
+new file mode 100644
+index 0000000..9999999
+--- /dev/null
++++ b/.github/PULL_REQUEST_TEMPLATE.md
+@@ -0,0 +1,31 @@
++## Summary
++
++## Risk
++- [ ] Low  - no behavior change (docs/test/CI only)
++- [ ] Medium - behind feature flag
++- [ ] High - user-facing behavior
++
++## Test plan
++- [ ] Unit
++- [ ] Integration
++- [ ] Contract (schemas/examples updated)
++
++## Feature flags touched
++
++## Screenshots/Logs
++
++## Checklist
++- [ ] OpenAPI/Docs updated
++- [ ] Error catalog references updated
++
+diff --git a/Makefile b/Makefile
+new file mode 100644
+index 0000000..aaaaaaa
+--- /dev/null
++++ b/Makefile
+@@ -0,0 +1,46 @@
++.PHONY: all build test lint docs contracts bench
++
++build:
++\tdotnet build -c Release
++
++test:
++\tdotnet test -c Release --no-build
++
++lint:
++\tdotnet format --verify-no-changes
++\tnpx -y @stoplight/spectral-cli lint DOCS/API/SmartPay.OpenAPI.yaml || true
++
++contracts:
++\t@echo "Generating/validating contracts..."
++\t@ls DOCS/API/schemas/*.json >/dev/null 2>&1 || echo "No schemas yet"
++
++docs:
++\t@echo "Docs staging - see DOCS/"
++
++bench:
++\t@echo "Benchmarks TBD - run BenchmarkDotNet projects"
++
+diff --git a/DOCS/OPS/Runbooks/FeatureFlags.md b/DOCS/OPS/Runbooks/FeatureFlags.md
+new file mode 100644
+index 0000000..bbbbbbb
+--- /dev/null
++++ b/DOCS/OPS/Runbooks/FeatureFlags.md
+@@ -0,0 +1,49 @@
++# Runbook — Toggle Feature Flags
++
++**Flags:**
++- `BlockchainEnabled` — default **false**
++- `QuotesCacheEnabled` — default **false**
++- `RateLimitEnabled` — default **true**
++
++## Toggle
++1. Update environment/app settings (e.g., `FEATURES__BlockchainEnabled=true`).
++2. Confirm `/health/ready` returns 200.
++3. Monitor logs & metrics for 15m.
++4. If degradation: revert and file incident with timestamps & correlation IDs.
++
+diff --git a/DOCS/OPS/Runbooks/Rollback.md b/DOCS/OPS/Runbooks/Rollback.md
+new file mode 100644
+index 0000000..ccccccc
+--- /dev/null
++++ b/DOCS/OPS/Runbooks/Rollback.md
+@@ -0,0 +1,36 @@
++# Runbook — Rollback
++
++1. Identify failing deploy version and last known good.
++2. Scale down failing pods/instances.
++3. Redeploy last known good build artifact.
++4. Verify `/health/ready` and run smoke tests.
++5. Update incident doc with timelines and root cause owners.
++
+diff --git a/DOCS/OPS/SLOs.md b/DOCS/OPS/SLOs.md
+new file mode 100644
+index 0000000..ddddddd
+--- /dev/null
++++ b/DOCS/OPS/SLOs.md
+@@ -0,0 +1,38 @@
++# SLOs & Error Budgets
++
++| Metric                 | SLO   | Window | Notes |
++|------------------------|-------|--------|-------|
++| Availability (API)     | 99.9% | 30d    | Health + quote path |
++| p95 latency (quote)    | <150ms| 30d    | Null providers |
++| Error rate (5xx)       | <0.1% | 30d    | Excludes 4xx |
++| Cold start             | <1.5s | 30d    | container |
++
+diff --git a/DEVX/SDKs/TypeScript/README.md b/DEVX/SDKs/TypeScript/README.md
+new file mode 100644
+index 0000000..eeeeeee
+--- /dev/null
++++ b/DEVX/SDKs/TypeScript/README.md
+@@ -0,0 +1,22 @@
++# SmartPay TypeScript SDK (skeleton)
++
++Goals: typed client, retries, ProblemDetails mapping, idempotency helper.
++
++```ts
++export async function quote(base: string, quote: string, amount: number) {
++  const res = await fetch(`/api/v1/fx/quote`, {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': crypto.randomUUID() },
++    body: JSON.stringify({ baseCurrency: base, quoteCurrency: quote, amount })
++  });
++  if (!res.ok) throw new Error(`HTTP ${res.status}`);
++  return await res.json();
++}
++```
++
+diff --git a/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2342_NOTES.md b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2342_NOTES.md
+new file mode 100644
+index 0000000..fefefef
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2342_NOTES.md
+@@ -0,0 +1,24 @@
++# Patch Notes — 2342 Next 50
++
++Adds contracts (schemas + examples), PR hygiene, release drafter, Postman collection, SLOs, runbooks, Makefile, and SDK skeleton.
++
++Nothing alters runtime behavior until wired (docs & dev assets only).
++

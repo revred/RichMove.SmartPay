@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://richmove.co.uk/schemas/FxQuoteResult.schema.json",
+  "title": "FxQuoteResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rate", "baseCurrency", "quoteCurrency", "amount", "expiresAtUtc"],
+  "properties": {
+    "rate": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Exchange rate from base to quote currency"
+    },
+    "baseCurrency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "Base currency code"
+    },
+    "quoteCurrency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "description": "Quote currency code"
+    },
+    "amount": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Original amount requested"
+    },
+    "fees": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Transaction fees"
+    },
+    "expiresAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Quote expiration timestamp (ISO 8601)"
+    },
+    "provider": {
+      "type": "string",
+      "description": "FX rate provider identifier"
+    }
+  }
+}

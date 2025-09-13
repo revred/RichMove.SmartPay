@@ -1,0 +1,98 @@
+diff --git a/ZEN/SOURCE/Api/Program.cs b/ZEN/SOURCE/Api/Program.cs
+index 0000000..1111111 100644
+--- a/ZEN/SOURCE/Api/Program.cs
++++ b/ZEN/SOURCE/Api/Program.cs
+@@ -1,20 +1,39 @@
+-using Microsoft.AspNetCore.Builder;
+-using Microsoft.Extensions.DependencyInjection;
+-using Microsoft.Extensions.Hosting;
++using Microsoft.AspNetCore.Builder;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Logging;
++using RichMove.SmartPay.Api.Extensions;
+ 
+ var builder = WebApplication.CreateBuilder(args);
+ 
+ // Add services to the container.
+ builder.Services.AddEndpointsApiExplorer();
+ builder.Services.AddSwaggerGen();
+ 
++// WP3: Platform Hardening (flags, correlation, idempotency, problem details)
++builder.Services.AddSmartPayPlatformHardening(builder.Configuration);
++
+ var app = builder.Build();
+ 
+ // Configure the HTTP request pipeline.
+ if (app.Environment.IsDevelopment())
+ {
+     app.UseSwagger();
+     app.UseSwaggerUI();
+ }
+ 
++// WP3: wire middleware & feature-flagged ledger binding
++var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
++app.UseSmartPayPlatformHardening(loggerFactory);
++
+ app.MapGet("/health/live", () => Results.Ok("OK"));
+ app.MapGet("/health/ready", () => Results.Ok("READY"));
+ 
+ app.Run();
+diff --git a/ZEN/SOURCE/Api/appsettings.WP3.sample.json b/ZEN/SOURCE/Api/appsettings.WP3.sample.json
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ZEN/SOURCE/Api/appsettings.WP3.sample.json
+@@ -0,0 +1,16 @@
++{
++  "Logging": {
++    "LogLevel": {
++      "Default": "Information",
++      "Microsoft.AspNetCore": "Information"
++    }
++  },
++  "Features": {
++    "BlockchainEnabled": false,
++    "QuotesCacheEnabled": false,
++    "RateLimitEnabled": true
++  }
++}
++
+diff --git a/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2350_WP3_Wiring.NOTES.md b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2350_WP3_Wiring.NOTES.md
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2350_WP3_Wiring.NOTES.md
+@@ -0,0 +1,42 @@
++# Patch Notes — 2350 WP3 Wiring
++
++This patch **wires** the platform-hardening scaffolding added in 2345:
++
++- Adds `using RichMove.SmartPay.Api.Extensions;` in `Program.cs`.
++- Calls `builder.Services.AddSmartPayPlatformHardening(builder.Configuration);` after service registrations.
++- Calls `app.UseSmartPayPlatformHardening(loggerFactory);` before endpoint mappings.
++- Provides `appsettings.WP3.sample.json` with the `Features` section.
++
++## Verify
++```bash
++dotnet build -c Release
++dotnet test -c Release
++```
++
++## Run
++```bash
++ASPNETCORE_ENVIRONMENT=Development dotnet run --project ZEN/SOURCE/Api
++```
++
++## Toggle Flags
++Use environment variables or your `appsettings.*.json`:
++
++```bash
++export FEATURES__BlockchainEnabled=false
++export FEATURES__RateLimitEnabled=true
++```
++
++> Correlation IDs and ProblemDetails are always on with this wiring; idempotency is enforced for POST/PUT/PATCH with a 24h window.
++
++— ChatGPT
++

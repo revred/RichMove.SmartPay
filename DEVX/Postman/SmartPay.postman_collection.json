@@ -1,0 +1,65 @@
+{
+  "info": {
+    "name": "RichMove SmartPay API",
+    "_postman_id": "e6b1aa4c-1111-2222-3333-444455556666",
+    "description": "RichMove SmartPay API collection for testing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5268",
+      "description": "Base URL for API requests"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health - Live",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/health/live",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "health", "live"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Health - Ready",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/health/ready",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "health", "ready"]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "FX Quote",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"baseCurrency\": \"GBP\",\n  \"quoteCurrency\": \"EUR\",\n  \"amount\": 1250.5,\n  \"clientId\": \"demo-client\",\n  \"correlationId\": \"test-{{$randomUUID}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/fx/quote",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "fx", "quote"]
+        }
+      },
+      "response": []
+    }
+  ]
+}
