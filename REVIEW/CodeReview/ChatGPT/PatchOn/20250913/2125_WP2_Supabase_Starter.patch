@@ -1,0 +1,311 @@
+diff --git a/ZEN/SOURCE/Infrastructure/Infrastructure.csproj b/ZEN/SOURCE/Infrastructure/Infrastructure.csproj
+index 98fedcb..aa11bb2 100644
+--- a/ZEN/SOURCE/Infrastructure/Infrastructure.csproj
++++ b/ZEN/SOURCE/Infrastructure/Infrastructure.csproj
+@@ -8,6 +8,11 @@
+     <Nullable>enable</Nullable>
+     <ImplicitUsings>enable</ImplicitUsings>
+   </PropertyGroup>
+ 
+   <ItemGroup>
++    <!-- Ensure Npgsql is available for Supabase/Postgres access -->
++    <PackageReference Include="Npgsql" Version="8.*" />
+   </ItemGroup>
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\Core\Core.csproj" />
+   </ItemGroup>
+diff --git a/ZEN/SOURCE/Api/Api.csproj b/ZEN/SOURCE/Api/Api.csproj
+index 6e7f8a9..7f8a9b0 100644
+--- a/ZEN/SOURCE/Api/Api.csproj
++++ b/ZEN/SOURCE/Api/Api.csproj
+@@ -13,6 +13,10 @@
+   <ItemGroup>
+     <PackageReference Include="FastEndpoints" Version="6.*" />
+     <PackageReference Include="FastEndpoints.Swagger" Version="6.*" />
++    <!-- Needed for typed access to NpgsqlDataSource in Program.cs -->
++    <PackageReference Include="Npgsql" Version="8.*" />
+   </ItemGroup>
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\Core\Core.csproj" />
+     <ProjectReference Include="..\..\Infrastructure\Infrastructure.csproj" />
+diff --git a/ZEN/SOURCE/Infrastructure/Supabase/NpgsqlDataSourceFactory.cs b/ZEN/SOURCE/Infrastructure/Supabase/NpgsqlDataSourceFactory.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Supabase/NpgsqlDataSourceFactory.cs
+@@ -0,0 +1,38 @@
++using Microsoft.Extensions.Options;
++using Npgsql;
++using RichMove.SmartPay.Infrastructure.Data;
++
++namespace RichMove.SmartPay.Infrastructure.Supabase;
++
++/// <summary>
++/// Provides a pooled NpgsqlDataSource for Supabase Postgres.
++/// </summary>
++public static class NpgsqlDataSourceFactory
++{
++    public static NpgsqlDataSource Create(IOptions<SupabaseOptions> options)
++    {
++        var cfg = options.Value;
++        if (!cfg.Enabled || string.IsNullOrWhiteSpace(cfg.DbConnectionString))
++            throw new InvalidOperationException("Supabase DbConnectionString is not configured or Supabase is disabled.");
++
++        var builder = new NpgsqlDataSourceBuilder(cfg.DbConnectionString);
++        // Optional: add tuning here if needed
++        return builder.Build();
++    }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/IFxPricingProvider.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/IFxPricingProvider.cs
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/IFxPricingProvider.cs
+@@ -0,0 +1,13 @@
++namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
++
++/// <summary>
++/// Supplies runtime pricing parameters for FX quotes.
++/// </summary>
++public interface IFxPricingProvider
++{
++    int MarkupBps { get; }
++    int FixedFeeMinorUnits { get; }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/CombinedFxPricingProvider.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/CombinedFxPricingProvider.cs
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/CombinedFxPricingProvider.cs
+@@ -0,0 +1,26 @@
++using Microsoft.Extensions.Options;
++
++namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
++
++/// <summary>
++/// Uses Supabase pricing if available; otherwise falls back to appsettings.
++/// </summary>
++public sealed class CombinedFxPricingProvider : IFxPricingProvider
++{
++    private readonly IFxPricingProvider? _supabase;
++    private readonly FxPricingOptions _fallback;
++
++    public CombinedFxPricingProvider(IOptions<FxPricingOptions> fallbackOptions, IEnumerable<IFxPricingProvider> providers)
++    {
++        _fallback = fallbackOptions.Value;
++        _supabase = providers.FirstOrDefault(p => p is SupabasePricingProvider);
++    }
++
++    public int MarkupBps => _supabase?.MarkupBps ?? _fallback.MarkupBps;
++    public int FixedFeeMinorUnits => _supabase?.FixedFeeMinorUnits ?? _fallback.FixedFeeMinorUnits;
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabasePricingProvider.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabasePricingProvider.cs
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabasePricingProvider.cs
+@@ -0,0 +1,48 @@
++using Npgsql;
++
++namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
++
++/// <summary>
++/// Reads pricing from public.fx_pricing_options in Supabase.
++/// Register this only when Supabase is enabled.
++/// </summary>
++public sealed class SupabasePricingProvider : IFxPricingProvider
++{
++    private readonly NpgsqlDataSource _db;
++
++    public SupabasePricingProvider(NpgsqlDataSource db) => _db = db;
++
++    public int MarkupBps { get; private set; } = 25;
++    public int FixedFeeMinorUnits { get; private set; } = 99;
++
++    public async Task RefreshAsync(CancellationToken ct = default)
++    {
++        await using var cmd = _db.CreateCommand("select markup_bps, fixed_fee_minor_units from public.fx_pricing_options where id='default'");
++        await using var reader = await cmd.ExecuteReaderAsync(ct);
++        if (await reader.ReadAsync(ct))
++        {
++            MarkupBps = reader.GetInt32(0);
++            FixedFeeMinorUnits = reader.GetInt32(1);
++        }
++    }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxRateSource.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxRateSource.cs
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxRateSource.cs
+@@ -0,0 +1,62 @@
++using Npgsql;
++using RichMove.SmartPay.Core.ForeignExchange;
++
++namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
++
++/// <summary>
++/// Fetches mid-market rates from public.fx_rate_mid in Supabase.
++/// </summary>
++public sealed class SupabaseFxRateSource : IFxRateSource
++{
++    private readonly NpgsqlDataSource _db;
++
++    public SupabaseFxRateSource(NpgsqlDataSource db) => _db = db;
++
++    public decimal GetMidRate(FxCurrencyPair pair)
++    {
++        // synchronous wrapper over async for IFxRateSource signature
++        return GetMidRateAsync(pair, CancellationToken.None).GetAwaiter().GetResult();
++    }
++
++    public async Task<decimal> GetMidRateAsync(FxCurrencyPair pair, CancellationToken ct)
++    {
++        // try direct
++        var r = await TryGet(pair.ToString(), ct);
++        if (r is not null) return r.Value;
++
++        // try inverse
++        r = await TryGet($"{pair.Quote}/{pair.Base}", ct);
++        if (r is not null)
++            return Decimal.Round(1m / r.Value, 6, MidpointRounding.AwayFromZero);
++
++        throw new KeyNotFoundException($"Mid-rate not available for {pair}.");
++    }
++
++    private async Task<decimal?> TryGet(string key, CancellationToken ct)
++    {
++        await using var cmd = _db.CreateCommand("select mid_rate from public.fx_rate_mid where pair=@p");
++        cmd.Parameters.AddWithValue("p", key);
++        var result = await cmd.ExecuteScalarAsync(ct);
++        return result is null ? null : Convert.ToDecimal(result);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/IFxQuoteRepository.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/IFxQuoteRepository.cs
+new file mode 100644
+index 0000000..6666666
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/IFxQuoteRepository.cs
+@@ -0,0 +1,11 @@
++using RichMove.SmartPay.Core.ForeignExchange;
++
++namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
++
++public interface IFxQuoteRepository
++{
++    Task SaveAsync(FxQuoteResult quote, Guid? createdBy = null, CancellationToken ct = default);
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxQuoteRepository.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxQuoteRepository.cs
+new file mode 100644
+index 0000000..7777777
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxQuoteRepository.cs
+@@ -0,0 +1,53 @@
++using Npgsql;
++using RichMove.SmartPay.Core.ForeignExchange;
++
++namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
++
++/// <summary>
++/// Persists quotes into public.fx_quotes.
++/// </summary>
++public sealed class SupabaseFxQuoteRepository : IFxQuoteRepository
++{
++    private readonly NpgsqlDataSource _db;
++
++    public SupabaseFxQuoteRepository(NpgsqlDataSource db) => _db = db;
++
++    public async Task SaveAsync(FxQuoteResult q, Guid? createdBy = null, CancellationToken ct = default)
++    {
++        const string sql = @"
++insert into public.fx_quotes
++(quote_id, provider, pair, mid_rate, rate, fee, source_amount, target_amount, expires_at, created_by)
++values (@quote_id, @provider, @pair, @mid_rate, @rate, @fee, @source_amount, @target_amount, @expires_at, @created_by)
++on conflict (quote_id) do nothing;";
++
++        await using var cmd = _db.CreateCommand(sql);
++        cmd.Parameters.AddWithValue("quote_id", q.QuoteId ?? Guid.NewGuid().ToString("N"));
++        cmd.Parameters.AddWithValue("provider", q.Provider);
++        cmd.Parameters.AddWithValue("pair", q.Pair);
++        cmd.Parameters.AddWithValue("mid_rate", q.MidRate);
++        cmd.Parameters.AddWithValue("rate", q.Rate);
++        cmd.Parameters.AddWithValue("fee", q.Fee);
++        cmd.Parameters.AddWithValue("source_amount", q.SourceAmount);
++        cmd.Parameters.AddWithValue("target_amount", q.TargetAmount);
++        cmd.Parameters.AddWithValue("expires_at", q.ExpiresAt.UtcDateTime);
++        if (createdBy is Guid uid)
++            cmd.Parameters.AddWithValue("created_by", uid);
++        else
++            cmd.Parameters.AddWithValue("created_by", DBNull.Value);
++
++        await cmd.ExecuteNonQueryAsync(ct);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/NoOpFxQuoteRepository.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/NoOpFxQuoteRepository.cs
+new file mode 100644
+index 0000000..8888888
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/NoOpFxQuoteRepository.cs
+@@ -0,0 +1,11 @@
++using RichMove.SmartPay.Core.ForeignExchange;
++
++namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
++
++public sealed class NoOpFxQuoteRepository : IFxQuoteRepository
++{
++    public Task SaveAsync(FxQuoteResult quote, Guid? createdBy = null, CancellationToken ct = default) 
++        => Task.CompletedTask;
++}
++
+diff --git a/ZEN/SOURCE/Api/Program.cs b/ZEN/SOURCE/Api/Program.cs
+index 0c0c0c0..0d0d0d0 100644
+--- a/ZEN/SOURCE/Api/Program.cs
++++ b/ZEN/SOURCE/Api/Program.cs
+@@ -1,12 +1,14 @@
+ using Microsoft.AspNetCore.Builder;
+ using Microsoft.Extensions.DependencyInjection;
+ using Microsoft.Extensions.Hosting;
+ using RichMove.SmartPay.Infrastructure.ForeignExchange;
+ using RichMove.SmartPay.Core.ForeignExchange;
+ using FastEndpoints;
+ using FastEndpoints.Swagger;
+-using Microsoft.Extensions.Options;
+-using RichMove.SmartPay.Infrastructure.Supabase;
++using Microsoft.Extensions.Options;
++using RichMove.SmartPay.Infrastructure.Supabase;
++using RichMove.SmartPay.Infrastructure.Data;
+ using Npgsql;
+ 
+ var builder = WebApplication.CreateBuilder(args);
+ 
+ // existing services...
+@@ -27,7 +29,7 @@ builder.Services.Configure<FxPricingOptions>(builder.Configuration.GetSection("FX:Pricing"));
+ // === WP2: Supabase integration ===
+-builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
++builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
+ 
+ // Conditional DI based on Supabase.Enabled
+ var supaSection = builder.Configuration.GetSection("Supabase");
+ var supaEnabled = supaSection.GetValue<bool>("Enabled");
+ 
+@@ -39,6 +41,7 @@ if (supaEnabled)
+     builder.Services.AddSingleton<NpgsqlDataSource>(sp =>
+         NpgsqlDataSourceFactory.Create(sp.GetRequiredService<IOptions<SupabaseOptions>>()));
+ 
+     // providers backed by Supabase
+     builder.Services.AddSingleton<IFxRateSource, SupabaseFxRateSource>();
++    builder.Services.AddSingleton<SupabasePricingProvider>();
+     builder.Services.AddSingleton<IFxPricingProvider>(sp => sp.GetRequiredService<SupabasePricingProvider>());
+     builder.Services.AddSingleton<IFxQuoteRepository, SupabaseFxQuoteRepository>();
+ 
+     // background refresh of pricing (initial + periodic)
+     builder.Services.AddHostedService<SupabasePricingRefreshService>();

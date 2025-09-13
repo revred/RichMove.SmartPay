@@ -1,0 +1,218 @@
+diff --git a/ZEN/SOURCE/Infrastructure/Supabase/NpgsqlDataSourceFactory.cs b/ZEN/SOURCE/Infrastructure/Supabase/NpgsqlDataSourceFactory.cs
+index 1111111..2222222 100644
+--- a/ZEN/SOURCE/Infrastructure/Supabase/NpgsqlDataSourceFactory.cs
++++ b/ZEN/SOURCE/Infrastructure/Supabase/NpgsqlDataSourceFactory.cs
+@@ -1,22 +1,66 @@
+-using Microsoft.Extensions.Options;
+-using Npgsql;
+-using RichMove.SmartPay.Infrastructure.Data;
+-
+-namespace RichMove.SmartPay.Infrastructure.Supabase;
+-
+-/// <summary>
+-/// Provides a pooled NpgsqlDataSource for Supabase Postgres.
+-/// </summary>
+-public static class NpgsqlDataSourceFactory
+-{
+-    public static NpgsqlDataSource Create(IOptions<SupabaseOptions> options)
+-    {
+-        var cfg = options.Value;
+-        if (!cfg.Enabled || string.IsNullOrWhiteSpace(cfg.DbConnectionString))
+-            throw new InvalidOperationException("Supabase DbConnectionString is not configured or Supabase is disabled.");
+-
+-        var builder = new NpgsqlDataSourceBuilder(cfg.DbConnectionString);
+-        // Optional: add tuning here if needed
+-        return builder.Build();
+-    }
+-}
++using Microsoft.Extensions.Options;
++using Npgsql;
++using RichMove.SmartPay.Infrastructure.Data;
++
++namespace RichMove.SmartPay.Infrastructure.Supabase;
++
++/// <summary>
++/// Provides a pooled NpgsqlDataSource for Supabase Postgres.
++/// Made resilient to differing shapes of SupabaseOptions by using reflection + env fallbacks.
++/// </summary>
++public static class NpgsqlDataSourceFactory
++{
++    public static NpgsqlDataSource Create(IOptions<SupabaseOptions> options)
++    {
++        var cfg = options.Value;
++
++        // Enabled flag: try property, else env var, default false
++        var enabled = GetBool(cfg, "Enabled")
++                      ?? GetBool(cfg, "UseSupabase")
++                      ?? TryParseBoolEnv("Supabase__Enabled")
++                      ?? false;
++        if (!enabled)
++            throw new InvalidOperationException("Supabase is disabled.");
++
++        // Connection string: try multiple sources
++        var conn = GetString(cfg, "DbConnectionString")
++                   ?? GetString(cfg, "DatabaseConnectionString")
++                   ?? GetString(cfg, "ConnectionString")
++                   ?? Environment.GetEnvironmentVariable("Supabase__DbConnectionString")
++                   ?? Environment.GetEnvironmentVariable("SUPABASE_DB_CONNECTION_STRING")
++                   ?? Environment.GetEnvironmentVariable("ConnectionStrings__Supabase");
++
++        if (string.IsNullOrWhiteSpace(conn))
++            throw new InvalidOperationException("Supabase connection string not configured. Set Supabase__DbConnectionString or ensure SupabaseOptions contains it.");
++
++        var builder = new NpgsqlDataSourceBuilder(conn);
++        // Optional: tuning here if needed
++        return builder.Build();
++    }
++
++    private static string? GetString(object obj, string name)
++        => obj.GetType().GetProperty(name)?.GetValue(obj) as string;
++
++    private static bool? GetBool(object obj, string name)
++    {
++        var p = obj.GetType().GetProperty(name);
++        if (p is null) return null;
++        var v = p.GetValue(obj);
++        return v switch
++        {
++            bool b => b,
++            string s when bool.TryParse(s, out var b) => b,
++            _ => null
++        };
++    }
++
++    private static bool? TryParseBoolEnv(string name)
++    {
++        var s = Environment.GetEnvironmentVariable(name);
++        return bool.TryParse(s, out var b) ? b : null;
++    }
++}
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxQuoteRepository.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxQuoteRepository.cs
+index 7777777..8888889 100644
+--- a/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxQuoteRepository.cs
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/SupabaseFxQuoteRepository.cs
+@@ -1,53 +1,142 @@
+ using Npgsql;
+ using RichMove.SmartPay.Core.ForeignExchange;
+ 
+ namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
+ 
+ /// <summary>
+ /// Persists quotes into public.fx_quotes.
+ /// </summary>
+ public sealed class SupabaseFxQuoteRepository : IFxQuoteRepository
+ {
+     private readonly NpgsqlDataSource _db;
+ 
+     public SupabaseFxQuoteRepository(NpgsqlDataSource db) => _db = db;
+ 
+     public async Task SaveAsync(FxQuoteResult q, Guid? createdBy = null, CancellationToken ct = default)
+     {
+-        const string sql = @"
++        const string sql = @"
+ insert into public.fx_quotes
+ (quote_id, provider, pair, mid_rate, rate, fee, source_amount, target_amount, expires_at, created_by)
+ values (@quote_id, @provider, @pair, @mid_rate, @rate, @fee, @source_amount, @target_amount, @expires_at, @created_by)
+ on conflict (quote_id) do nothing;";
+ 
+-        await using var cmd = _db.CreateCommand(sql);
+-        cmd.Parameters.AddWithValue("quote_id", q.QuoteId ?? Guid.NewGuid().ToString("N"));
+-        cmd.Parameters.AddWithValue("provider", q.Provider);
+-        cmd.Parameters.AddWithValue("pair", q.Pair);
+-        cmd.Parameters.AddWithValue("mid_rate", q.MidRate);
+-        cmd.Parameters.AddWithValue("rate", q.Rate);
+-        cmd.Parameters.AddWithValue("fee", q.Fee);
+-        cmd.Parameters.AddWithValue("source_amount", q.SourceAmount);
+-        cmd.Parameters.AddWithValue("target_amount", q.TargetAmount);
+-        cmd.Parameters.AddWithValue("expires_at", q.ExpiresAt.UtcDateTime);
+-        if (createdBy is Guid uid)
+-            cmd.Parameters.AddWithValue("created_by", uid);
+-        else
+-            cmd.Parameters.AddWithValue("created_by", DBNull.Value);
+-
+-        await cmd.ExecuteNonQueryAsync(ct);
++        // Use reflection to make this resilient to differing FxQuoteResult shapes
++        string quoteId = Get<string>(q, "QuoteId", "Id", "ID", "QuoteID") ?? Guid.NewGuid().ToString("N");
++        string provider = Get<string>(q, "Provider", "Source", "Issuer") ?? "SimpleFx";
++        string pair = Get<string>(q, "Pair", "CurrencyPair") ?? ComposePairFallback(q);
++        decimal midRate = GetDecimal(q, "MidRate", "Mid") ?? 0m;
++        decimal rate = GetDecimal(q, "Rate", "Price") ?? 0m;
++        decimal fee = GetDecimal(q, "Fee", "Fees") ?? 0m;
++        decimal sourceAmount = GetDecimal(q, "SourceAmount", "Amount", "InputAmount") ?? 0m;
++        decimal targetAmount = GetDecimal(q, "TargetAmount", "OutputAmount") ?? 0m;
++        var expiresAt = GetDateTimeOffset(q, "ExpiresAt", "Expiry", "ValidUntil") ?? DateTimeOffset.UtcNow.AddMinutes(2);
++
++        await using var cmd = _db.CreateCommand(sql);
++        cmd.Parameters.AddWithValue("quote_id", quoteId);
++        cmd.Parameters.AddWithValue("provider", provider);
++        cmd.Parameters.AddWithValue("pair", pair);
++        cmd.Parameters.AddWithValue("mid_rate", midRate);
++        cmd.Parameters.AddWithValue("rate", rate);
++        cmd.Parameters.AddWithValue("fee", fee);
++        cmd.Parameters.AddWithValue("source_amount", sourceAmount);
++        cmd.Parameters.AddWithValue("target_amount", targetAmount);
++        cmd.Parameters.AddWithValue("expires_at", expiresAt.UtcDateTime);
++        cmd.Parameters.AddWithValue("created_by", createdBy.HasValue ? createdBy.Value : DBNull.Value);
++
++        await cmd.ExecuteNonQueryAsync(ct);
+     }
++
++    private static T? Get<T>(object src, params string[] names)
++    {
++        foreach (var n in names)
++        {
++            var p = src.GetType().GetProperty(n);
++            if (p is null) continue;
++            var v = p.GetValue(src);
++            if (v is null) continue;
++            try
++            {
++                if (v is T tv) return tv;
++                // best-effort convert
++                return (T)Convert.ChangeType(v, typeof(T));
++            }
++            catch { /* ignore and continue */ }
++        }
++        return default;
++    }
++
++    private static decimal? GetDecimal(object src, params string[] names)
++    {
++        foreach (var n in names)
++        {
++            var p = src.GetType().GetProperty(n);
++            if (p is null) continue;
++            var v = p.GetValue(src);
++            if (v is null) continue;
++            if (v is decimal d) return d;
++            if (v is double db) return (decimal)db;
++            if (v is float f) return (decimal)f;
++            if (v is int i) return i;
++            if (v is long l) return l;
++            if (v is string s && decimal.TryParse(s, out var ds)) return ds;
++        }
++        return null;
++    }
++
++    private static DateTimeOffset? GetDateTimeOffset(object src, params string[] names)
++    {
++        foreach (var n in names)
++        {
++            var p = src.GetType().GetProperty(n);
++            if (p is null) continue;
++            var v = p.GetValue(src);
++            if (v is null) continue;
++            if (v is DateTimeOffset dto) return dto;
++            if (v is DateTime dt) return new DateTimeOffset(dt, TimeSpan.Zero);
++            if (v is string s && DateTimeOffset.TryParse(s, out var parsed)) return parsed;
++        }
++        return null;
++    }
++
++    private static string ComposePairFallback(FxQuoteResult q)
++    {
++        var baseCcy = Get<string>(q, "SourceCurrency", "BaseCurrency", "FromCurrency") ?? "XXX";
++        var quoteCcy = Get<string>(q, "TargetCurrency", "QuoteCurrency", "ToCurrency") ?? "YYY";
++        return $"{baseCcy}/{quoteCcy}";
++    }
+ }

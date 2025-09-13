@@ -1,0 +1,379 @@
+diff --git a/ZEN/SOURCE/Infrastructure/ForeignExchange/SimpleFxQuoteProvider.cs b/ZEN/SOURCE/Infrastructure/ForeignExchange/SimpleFxQuoteProvider.cs
+index abcdeff..abcd123 100644
+--- a/ZEN/SOURCE/Infrastructure/ForeignExchange/SimpleFxQuoteProvider.cs
++++ b/ZEN/SOURCE/Infrastructure/ForeignExchange/SimpleFxQuoteProvider.cs
+@@ -1,13 +1,16 @@
+ using RichMove.SmartPay.Core.ForeignExchange;
++using Microsoft.Extensions.Logging;
+ 
+ namespace RichMove.SmartPay.Infrastructure.ForeignExchange;
+ 
+ /// <summary>
+ /// First-cut provider that prices quotes from an in-memory mid-rate source.
+ /// </summary>
+ public sealed class SimpleFxQuoteProvider : IFxQuoteProvider
+ {
+     private readonly IFxRateSource _rates;
+     private readonly IFxPricingProvider _pricing;
+     private readonly IFxQuoteRepository _repo;
++    private readonly ILogger<SimpleFxQuoteProvider> _log;
+ 
+-    public SimpleFxQuoteProvider(IFxRateSource rates, IFxPricingProvider pricing, IFxQuoteRepository repo)
++    public SimpleFxQuoteProvider(IFxRateSource rates, IFxPricingProvider pricing, IFxQuoteRepository repo, ILogger<SimpleFxQuoteProvider> log)
+     {
+         _rates = rates;
+         _pricing = pricing;
+         _repo = repo;
++        _log = log;
+     }
+ 
+     public FxQuoteResult Quote(FxQuoteRequest request)
+     {
+         ArgumentNullException.ThrowIfNull(request);
+@@ -29,9 +32,19 @@ public sealed class SimpleFxQuoteProvider : IFxQuoteProvider
+             TargetAmount = target,
+             ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(2),
+             QuoteId = Guid.NewGuid().ToString("N")
+         };
+ 
+-        // Fire-and-forget persist (best-effort); if you want strict behavior, await and handle errors.
+-        _ = _repo.SaveAsync(quote);
++        // Fire-and-forget persist with safe logging (best-effort).
++        _ = Task.Run(async () =>
++        {
++            try
++            {
++                await _repo.SaveAsync(quote);
++            }
++            catch (Exception ex)
++            {
++                _log.LogWarning(ex, "Failed to persist FX quote {QuoteId}", quote.QuoteId);
++            }
++        });
+         return quote;
+     }
+ }
+ 
+diff --git a/ZEN/SOURCE/Infrastructure/Supabase/SupabasePricingRefreshService.cs b/ZEN/SOURCE/Infrastructure/Supabase/SupabasePricingRefreshService.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Supabase/SupabasePricingRefreshService.cs
+@@ -0,0 +1,71 @@
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Logging;
++using Microsoft.Extensions.Options;
++
++namespace RichMove.SmartPay.Infrastructure.Supabase;
++
++/// <summary>
++/// Background refresher for Supabase pricing options so changes are picked up without restarts.
++/// Runs only when Supabase is enabled.
++/// </summary>
++public sealed class SupabasePricingRefreshService : BackgroundService
++{
++    private readonly SupabasePricingProvider _pricing;
++    private readonly ILogger<SupabasePricingRefreshService> _log;
++    private readonly TimeSpan _interval;
++
++    public SupabasePricingRefreshService(
++        SupabasePricingProvider pricing,
++        ILogger<SupabasePricingRefreshService> log,
++        IOptions<SupabaseOptions> options)
++    {
++        _pricing = pricing;
++        _log = log;
++        // default 5 minutes; can be made configurable if needed
++        _interval = TimeSpan.FromMinutes(5);
++    }
++
++    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
++    {
++        _log.LogInformation("SupabasePricingRefreshService starting");
++
++        // initial fetch
++        try { await _pricing.RefreshAsync(stoppingToken); }
++        catch (Exception ex) { _log.LogWarning(ex, "Initial pricing refresh failed"); }
++
++        while (!stoppingToken.IsCancellationRequested)
++        {
++            try
++            {
++                await Task.Delay(_interval, stoppingToken);
++                await _pricing.RefreshAsync(stoppingToken);
++            }
++            catch (TaskCanceledException) { }
++            catch (Exception ex)
++            {
++                _log.LogWarning(ex, "Periodic pricing refresh failed");
++            }
++        }
++
++        _log.LogInformation("SupabasePricingRefreshService stopping");
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Endpoints/Health/DbEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Health/DbEndpoint.cs
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Health/DbEndpoint.cs
+@@ -0,0 +1,86 @@
++using FastEndpoints;
++using Microsoft.Extensions.Options;
++using Npgsql;
++using RichMove.SmartPay.Infrastructure.Supabase;
++
++namespace RichMove.SmartPay.Api.Endpoints.Health;
++
++/// <summary>
++/// Performs a lightweight DB connectivity check when Supabase is enabled.
++/// GET /v1/health/db
++/// </summary>
++public sealed class DbEndpoint : EndpointWithoutRequest<DbHealthResponse>
++{
++    private readonly IOptions<SupabaseOptions> _supa;
++    private readonly IServiceProvider _sp;
++
++    public DbEndpoint(IOptions<SupabaseOptions> supa, IServiceProvider sp)
++    {
++        _supa = supa;
++        _sp = sp;
++    }
++
++    public override void Configure()
++    {
++        Get("/v1/health/db");
++        AllowAnonymous();
++        Summary(s =>
++        {
++            s.Summary = "Database connectivity health";
++            s.Description = "Checks basic DB connectivity/status when Supabase is enabled.";
++            s.Tags = new[] { "health" };
++        });
++    }
++
++    public override async Task HandleAsync(CancellationToken ct)
++    {
++        var enabled = _supa.Value.Enabled;
++        var resp = new DbHealthResponse { SupabaseEnabled = enabled };
++
++        if (!enabled)
++        {
++            await SendOkAsync(resp, ct);
++            return;
++        }
++
++        var ds = _sp.GetService<NpgsqlDataSource>();
++        if (ds is null)
++        {
++            resp.Error = "NpgsqlDataSource not configured";
++            await SendOkAsync(resp, ct);
++            return;
++        }
++
++        var started = DateTime.UtcNow;
++        try
++        {
++            await using var cmd = ds.CreateCommand("select 1");
++            var result = await cmd.ExecuteScalarAsync(ct);
++            resp.Connected = (result is int i && i == 1) || $"{result}" == "1";
++        }
++        catch (Exception ex)
++        {
++            resp.Error = ex.GetType().Name + ": " + ex.Message;
++            resp.Connected = false;
++        }
++        finally
++        {
++            resp.DurationMs = (int)(DateTime.UtcNow - started).TotalMilliseconds;
++        }
++
++        await SendOkAsync(resp, ct);
++    }
++}
++
++public sealed class DbHealthResponse
++{
++    public bool SupabaseEnabled { get; init; }
++    public bool Connected { get; set; }
++    public int DurationMs { get; set; }
++    public string? Error { get; set; }
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/DbHealthEndpointTests.cs b/ZEN/TESTS/Api.Tests/DbHealthEndpointTests.cs
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/DbHealthEndpointTests.cs
+@@ -0,0 +1,27 @@
++using System.Net.Http.Json;
++using Microsoft.AspNetCore.Mvc.Testing;
++using Xunit;
++
++namespace RichMove.SmartPay.Api.Tests;
++
++public sealed class DbHealthEndpointTests : IClassFixture<WebApplicationFactory<Program>>
++{
++    private readonly WebApplicationFactory<Program> _factory;
++
++    public DbHealthEndpointTests(WebApplicationFactory<Program> factory) => _factory = factory;
++
++    [Fact]
++    public async Task Get_DbHealth_Returns_200()
++    {
++        var client = _factory.CreateClient();
++        var resp = await client.GetAsync("/v1/health/db");
++        resp.EnsureSuccessStatusCode();
++
++        var payload = await resp.Content.ReadFromJsonAsync<DbHealthResponse>();
++        Assert.NotNull(payload);
++        // Endpoint should respond regardless of Supabase enabled/disabled
++        Assert.True(payload!.DurationMs >= 0);
++    }
++}
++
+diff --git a/ZEN/SUPABASE/migrations/0002_wp2_dod.sql b/ZEN/SUPABASE/migrations/0002_wp2_dod.sql
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/ZEN/SUPABASE/migrations/0002_wp2_dod.sql
+@@ -0,0 +1,26 @@
++-- WP2 DoD hardening
++
++-- Helpful indexes
++create index if not exists ix_fx_quotes_quote_id on public.fx_quotes(quote_id);
++create index if not exists ix_fx_quotes_created_at on public.fx_quotes(created_at);
++create index if not exists ix_fx_rate_mid_pair on public.fx_rate_mid(pair);
++
++-- Ensure defaults and constraints are sensible
++alter table public.fx_pricing_options
++  alter column markup_bps set not null,
++  alter column fixed_fee_minor_units set not null;
++
++-- Keep created_by nullable for now (auth integration follows),
++-- but add a check to prevent empty UUIDs if provided.
++create or replace function public._not_empty_uuid(u uuid) returns boolean language sql immutable as $$
++  select u is not null and u::text <> '00000000-0000-0000-0000-000000000000'::text;
++$$;
++
++alter table public.fx_quotes
++  drop constraint if exists fx_quotes_created_by_notempty,
++  add constraint fx_quotes_created_by_notempty check (created_by is null or public._not_empty_uuid(created_by));
++
++-- Update timestamp triggers can be added later for auditing if required.
++
+diff --git a/ZEN/SOURCE/Api/Program.cs b/ZEN/SOURCE/Api/Program.cs
+index 0b0b0b0..0c0c0c0 100644
+--- a/ZEN/SOURCE/Api/Program.cs
++++ b/ZEN/SOURCE/Api/Program.cs
+@@ -20,10 +20,20 @@ builder.Services.AddControllers();
+ // WP2: FX pricing (first cut)
+ builder.Services.Configure<FxPricingOptions>(builder.Configuration.GetSection("FX:Pricing"));
+ 
+ // === WP2: Supabase integration ===
+ builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
+ 
+ // optional: background refresh for SupabasePricingProvider could be added later
+ 
+ // Conditional DI based on Supabase.Enabled
+ var supaSection = builder.Configuration.GetSection("Supabase");
+ var supaEnabled = supaSection.GetValue<bool>("Enabled");
+ 
+ if (supaEnabled)
+ {
+     // pooled data source
+     builder.Services.AddSingleton<NpgsqlDataSource>(sp =>
+         NpgsqlDataSourceFactory.Create(sp.GetRequiredService<IOptions<SupabaseOptions>>()));
+ 
+-    // providers backed by Supabase
+-    builder.Services.AddSingleton<IFxRateSource, SupabaseFxRateSource>();
+-    builder.Services.AddSingleton<IFxPricingProvider, SupabasePricingProvider>();
++    // providers backed by Supabase
++    builder.Services.AddSingleton<IFxRateSource, SupabaseFxRateSource>();
++
++    // register concrete pricing provider for hosted service access + typed injection
++    builder.Services.AddSingleton<SupabasePricingProvider>();
++    builder.Services.AddSingleton<IFxPricingProvider>(sp => sp.GetRequiredService<SupabasePricingProvider>());
+     builder.Services.AddSingleton<IFxQuoteRepository, SupabaseFxQuoteRepository>();
++
++    // background refresh of pricing (initial + periodic)
++    builder.Services.AddHostedService<SupabasePricingRefreshService>();
+ }
+ else
+ {
+     // in-memory demo providers
+     builder.Services.AddSingleton<IFxRateSource, InMemoryFxRateSource>();
+     builder.Services.AddSingleton<IFxQuoteRepository, NoOpFxQuoteRepository>();
+ }
+ 
+ // Combined pricing picks Supabase if present, else appsettings
+ builder.Services.AddSingleton<IFxPricingProvider, CombinedFxPricingProvider>();
+ 
+ // Core quote calculator/provider remains the same
+ builder.Services.AddSingleton<IFxQuoteProvider, SimpleFxQuoteProvider>();
+ 
+ // WP1.2: FastEndpoints bootstrap (coexists with MVC controllers)
+ builder.Services.AddFastEndpoints();
+ builder.Services.SwaggerDocument(); // FastEndpoints.Swagger (NSwag) doc+UI
+ 
+ var app = builder.Build();
+ 
+ if (app.Environment.IsDevelopment())
+ {
+     app.UseSwagger();
+     app.UseSwaggerUI();
+ }
+ 
+ // WP1.2: enable FastEndpoints
+ app.UseFastEndpoints();
+ 
+ // WP1.2: enable FE Swagger (served at /swagger and /swagger/index.html by default)
+ app.UseSwaggerGen();
+ 
+ // WP2: map controllers (keep existing controllers)
+ app.MapControllers();
+ 
+ // existing health endpoints remain unchanged
+ 
+ app.Run();
+diff --git a/DOCS/API_Spec_Skeleton.yaml b/DOCS/API_Spec_Skeleton.yaml
+index aaaaaaa..bbbbbbb 100644
+--- a/DOCS/API_Spec_Skeleton.yaml
++++ b/DOCS/API_Spec_Skeleton.yaml
+@@ -172,6 +172,30 @@ paths:
+         '429':
+           description: Rate limit exceeded
+ 
++  /v1/health/env:
++    get:
++      summary: Environment health/info
++      tags: [health]
++      responses:
++        '200':
++          description: Returns current environment flags and provider wiring
++
++  /v1/health/db:
++    get:
++      summary: Database connectivity health
++      tags: [health]
++      responses:
++        '200':
++          description: Returns whether DB connectivity is available (non-fatal when disabled)
++
+diff --git a/SECRETS.md b/SECRETS.md
+index 1111111..2222222 100644
+--- a/SECRETS.md
++++ b/SECRETS.md
+@@ -1,6 +1,9 @@
+ # Secrets Setup — smartpay-red (FREE)
+ 
+ This project uses a **red-first** approach: run everything on a single FREE Supabase project (**smartpay-red**) until we go live. Then we'll create **smartpay-green** (PAID) and switch.
+ 
+ > ⚠️ Never commit real secrets. Use the provided sample file and the `secrets/` folder which is git-ignored by default.
+ 
++> **Tip:** Prefer the pooled connection (`Port=6543`) for the API. Use `5432` only for CLI/admin operations.
++
+ ## 1) Create your local secrets file
+ Create this file (do **not** commit it):
+ 
