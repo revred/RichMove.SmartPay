@@ -19,7 +19,7 @@ The Supabase CLI is installed in the `ZEN/TOOLS/` directory:
 ZEN/
 ├── TOOLS/
 │   └── supabase.exe          # Supabase CLI tool
-└── supabase/
+└── SUPABASE/
     ├── .gitignore           # Supabase-specific gitignore
     ├── config.toml          # Main configuration file
     └── .temp/               # Temporary files (ignored by git)
@@ -76,9 +76,9 @@ From the `ZEN` directory:
 ### Development Workflow
 
 1. **Local Development**: Use `supabase start` to run the full stack locally
-2. **Database Migrations**: Store SQL migrations in `supabase/migrations/`
-3. **Seed Data**: Place seed files in `supabase/seed.sql`
-4. **Edge Functions**: Store Deno functions in `supabase/functions/`
+2. **Database Migrations**: Store SQL migrations in `SUPABASE/migrations/`
+3. **Seed Data**: Place seed files in `SUPABASE/seed.sql`
+4. **Edge Functions**: Store Deno functions in `SUPABASE/functions/`
 
 ## Integration with .NET
 
