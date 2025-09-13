@@ -1,0 +1,159 @@
+diff --git a/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/README.md b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/README.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/README.md
+@@ -0,0 +1,58 @@
++# PatchOn — Sep 13, 2025
++
++This folder holds day-stamped review artifacts and patch files produced by ChatGPT.
++
++## Files
++
++- `1958_WP1_Alignment.patch` — initial WP1 alignment patch (already applied).
++- `2015_WP1.1.patch` — **follow-up actionables** (coverage gate workflow, PR checklist).
++
++## Apply a patch
++
++From repo root:
++
++```bash
++git apply REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2015_WP1.1.patch
++```
++
++Or commit it as a change:
++
++```bash
++git add -A
++git commit -m "review: WP1.1 actionables — coverage workflow + PR checklist + docs"
++```
++
++> Patches in this folder are additive and safe to re-run; they only create new files or tweak CI/docs in isolated locations.
++
++---
++
++## What this patch does
++
++1. Adds a **coverage enforcement workflow** (`.github/workflows/ci-coverage.yml`) that:
++   - Runs on `push`/`pull_request` for `master`, `main`, and `develop`.
++   - Collects coverage via `XPlat Code Coverage`.
++   - **Enforces a soft gate** (default min 60%) *if* a Cobertura report is present; otherwise logs and skips (to avoid blocking while coverage is being wired in WP1).
++   - Uploads coverage artifacts for inspection.
++2. Introduces a **Pull Request template** with checks for secrets, docs, tests, and WP linkage.
++3. Adds this **README** so reviewers know how to apply/iterate future patches.
++
++> Ratchet the coverage threshold upwards in later WPs. See `env: MIN_COVERAGE` in the workflow.
++
+diff --git a/.github/workflows/ci-coverage.yml b/.github/workflows/ci-coverage.yml
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/.github/workflows/ci-coverage.yml
+@@ -0,0 +1,106 @@
++name: ci-coverage
++
++on:
++  pull_request:
++    branches: [ "master", "main", "develop" ]
++  push:
++    branches: [ "master", "main", "develop" ]
++
++jobs:
++  coverage:
++    runs-on: ubuntu-latest
++    env:
++      DOTNET_VERSION: "9.0.x"
++      MIN_COVERAGE: "0.60" # WP1 soft gate — ratchet up in later WPs
++    steps:
++      - name: Checkout
++        uses: actions/checkout@v4
++
++      - name: Setup .NET
++        uses: actions/setup-dotnet@v5
++        with:
++          dotnet-version: ${{ env.DOTNET_VERSION }}
++
++      - name: Restore
++        run: dotnet restore
++
++      - name: Build (Release)
++        run: dotnet build --configuration Release --no-restore
++
++      - name: Test (with coverage)
++        run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage"
++
++      - name: Find coverage report
++        id: cov
++        shell: bash
++        run: |
++          set -e
++          FILE="$(ls **/TestResults/*/coverage.cobertura.xml 2>/dev/null | head -n 1 || true)"
++          if [ -z "$FILE" ]; then
++            echo "found=false" >> $GITHUB_OUTPUT
++            echo "No Cobertura coverage file found; skipping gate for WP1."
++          else
++            echo "found=true" >> $GITHUB_OUTPUT
++            echo "file=$FILE" >> $GITHUB_OUTPUT
++            echo "Found coverage file: $FILE"
++          fi
++
++      - name: Enforce min coverage
++        if: steps.cov.outputs.found == 'true'
++        shell: bash
++        run: |
++          python - <<'PY' "${{ steps.cov.outputs.file }}" "${{ env.MIN_COVERAGE }}"
++          import sys, xml.etree.ElementTree as ET
++          p, thr = sys.argv[1], float(sys.argv[2])
++          root = ET.parse(p).getroot()
++          # Cobertura root has 'line-rate' or 'lines-covered'/'lines-valid'; prefer line-rate if present.
++          rate = root.attrib.get("line-rate")
++          if rate is None:
++            covered = float(root.attrib.get("lines-covered", 0))
++            valid = float(root.attrib.get("lines-valid", 0)) or 1.0
++            rate = covered / valid
++          else:
++            rate = float(rate)
++          print(f"line-rate={rate:.4f}")
++          if rate + 1e-9 < thr:
++            print(f"::error::Coverage {rate:.2%} below threshold {thr:.2%}")
++            sys.exit(2)
++          else:
++            print(f"Coverage OK: {rate:.2%} >= {thr:.2%}")
++          PY
++
++      - name: Upload coverage (artifact)
++        if: always()
++        uses: actions/upload-artifact@v4
++        with:
++          name: coverage
++          path: |
++            **/TestResults/*/coverage.cobertura.xml
++            **/TestResults/*/coverage.xml
++
+diff --git a/.github/pull_request_template.md b/.github/pull_request_template.md
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/.github/pull_request_template.md
+@@ -0,0 +1,33 @@
++## Summary
++
++_Describe what this PR changes and why._
++
++### Work Package Link
++
++Closes: `WPS/WP1.md` (or specific section) — **CP-#**: _commit point_
++
++### Checklist
++
++- [ ] **CI green** (build, format, tests).
++- [ ] **Coverage**: Cobertura generated (gate ≥ default or justified if skipped).
++- [ ] **Tests**: Added/updated canaries for new/changed behavior.
++- [ ] **Docs**: Updated relevant `WPS/` or `DOCS/` files.
++- [ ] **Secrets**: No credentials, tokens, or keys in this PR.
++- [ ] **ZEN isolation** maintained (code stays under `ZEN/`).
++
++### Screenshots / Logs (optional)
++
++_Attach snippets of passing checks, coverage summary, or local run output if useful._
++

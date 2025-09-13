@@ -1,0 +1,79 @@
+name: ci-coverage
+
+on:
+  pull_request:
+    branches: [ "master", "main", "develop" ]
+  push:
+    branches: [ "master", "main", "develop" ]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_VERSION: "9.0.x"
+      MIN_COVERAGE: "0.60" # WP1 soft gate — ratchet up in later WPs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test (with coverage)
+        run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage"
+
+      - name: Find coverage report
+        id: cov
+        shell: bash
+        run: |
+          set -e
+          FILE="$(ls **/TestResults/*/coverage.cobertura.xml 2>/dev/null | head -n 1 || true)"
+          if [ -z "$FILE" ]; then
+            echo "found=false" >> $GITHUB_OUTPUT
+            echo "No Cobertura coverage file found; skipping gate for WP1."
+          else
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "file=$FILE" >> $GITHUB_OUTPUT
+            echo "Found coverage file: $FILE"
+          fi
+
+      - name: Enforce min coverage
+        if: steps.cov.outputs.found == 'true'
+        shell: bash
+        run: |
+          python - <<'PY' "${{ steps.cov.outputs.file }}" "${{ env.MIN_COVERAGE }}"
+          import sys, xml.etree.ElementTree as ET
+          p, thr = sys.argv[1], float(sys.argv[2])
+          root = ET.parse(p).getroot()
+          # Cobertura root has 'line-rate' or 'lines-covered'/'lines-valid'; prefer line-rate if present.
+          rate = root.attrib.get("line-rate")
+          if rate is None:
+            covered = float(root.attrib.get("lines-covered", 0))
+            valid = float(root.attrib.get("lines-valid", 0)) or 1.0
+            rate = covered / valid
+          else:
+            rate = float(rate)
+          print(f"line-rate={rate:.4f}")
+          if rate + 1e-9 < thr:
+            print(f"::error::Coverage {rate:.2%} below threshold {thr:.2%}")
+            sys.exit(2)
+          else:
+            print(f"Coverage OK: {rate:.2%} >= {thr:.2%}")
+          PY
+
+      - name: Upload coverage (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            **/TestResults/*/coverage.cobertura.xml
+            **/TestResults/*/coverage.xml

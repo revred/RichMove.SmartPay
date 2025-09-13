@@ -15,7 +15,8 @@
       "Bash(dotnet build:*)",
       "Bash(dotnet test:*)",
       "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --env-filter '\nexport GIT_COMMITTER_NAME=\"\"Ram Revanur\"\"\nexport GIT_COMMITTER_EMAIL=\"\"ram.revanur@users.noreply.github.com\"\"\nexport GIT_AUTHOR_NAME=\"\"Ram Revanur\"\"\nexport GIT_AUTHOR_EMAIL=\"\"ram.revanur@users.noreply.github.com\"\"\n' --force -- --all)",
-      "Read(//c/code/RichMove/**)"
+      "Read(//c/code/RichMove/**)",
+      "Bash(git apply:*)"
     ],
     "deny": [],
     "ask": []
