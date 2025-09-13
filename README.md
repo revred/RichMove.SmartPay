@@ -1,183 +1,206 @@
-# Supabase CLI
+# RichMove.SmartPay
 
-[![Coverage Status](https://coveralls.io/repos/github/supabase/cli/badge.svg?branch=main)](https://coveralls.io/github/supabase/cli?branch=main) [![Bitbucket Pipelines](https://img.shields.io/bitbucket/pipelines/supabase-cli/setup-cli/master?style=flat-square&label=Bitbucket%20Canary)](https://bitbucket.org/supabase-cli/setup-cli/pipelines) [![Gitlab Pipeline Status](https://img.shields.io/gitlab/pipeline-status/sweatybridge%2Fsetup-cli?label=Gitlab%20Canary)
-](https://gitlab.com/sweatybridge/setup-cli/-/pipelines)
+[![Build Status](https://github.com/ramrevanur/richmove-smartpay/workflows/ci-coverage/badge.svg)](https://github.com/ramrevanur/richmove-smartpay/actions)
+[![Coverage Gate](https://img.shields.io/badge/coverage-60%25%20min-brightgreen)](https://github.com/ramrevanur/richmove-smartpay/actions)
 
-[Supabase](https://supabase.io) is an open source Firebase alternative. We're building the features of Firebase using enterprise-grade open source tools.
+**Payment orchestration platform conceived and specified by Ram Revanur**
 
-This repository contains all the functionality for Supabase CLI.
+A modern, scalable payment orchestration platform built with .NET 9, FastEndpoints, and Supabase integration for seamless foreign exchange operations and multi-provider payment processing.
 
-- [x] Running Supabase locally
-- [x] Managing database migrations
-- [x] Creating and deploying Supabase Functions
-- [x] Generating types directly from your database schema
-- [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
+## 🏗️ Architecture
 
-## Getting started
+- **Clean Architecture** with clear separation of concerns
+- **Domain-Driven Design** principles
+- **FastEndpoints** for high-performance API development
+- **Supabase** integration for data persistence and real-time features
+- **Conditional DI** for flexible deployment scenarios
 
-### Install the CLI
+## 🚀 Features
 
-Available via [NPM](https://www.npmjs.com) as dev dependency. To install:
+### WP1: Foundation
+- ✅ FastEndpoints integration with dual Swagger support
+- ✅ Comprehensive CI/CD pipeline with 60% test coverage enforcement
+- ✅ Clean Architecture setup with Core/Infrastructure/API separation
+- ✅ Health checks and monitoring endpoints
 
+### WP2: Supabase Integration
+- ✅ Foreign exchange quote generation with real-time pricing
+- ✅ Persistent quote storage in Supabase PostgreSQL
+- ✅ Dynamic pricing updates via background services
+- ✅ Database health monitoring at `/v1/health/db`
+- ✅ Conditional deployment (Supabase vs in-memory fallback)
+
+## 🛠️ Technology Stack
+
+- **.NET 9.0** with C# 13
+- **FastEndpoints 6.1** for API development
+- **Supabase** (PostgreSQL 17) for data persistence
+- **Npgsql** for database connectivity
+- **xUnit** with FluentAssertions for testing
+- **GitHub Actions** for CI/CD
+- **Testcontainers** for integration testing
+
+## 📦 Project Structure
+
+```
+ZEN/
+├── SOURCE/
+│   ├── Api/                    # FastEndpoints API layer
+│   │   ├── Endpoints/          # API endpoints organized by feature
+│   │   └── Program.cs          # Application bootstrap
+│   ├── Core/                   # Domain logic and interfaces
+│   │   └── ForeignExchange/    # FX domain models and interfaces
+│   └── Infrastructure/         # Data access and external services
+│       ├── Data/               # Data configuration classes
+│       ├── ForeignExchange/    # FX implementation services
+│       └── Supabase/           # Supabase-specific implementations
+├── TESTS/                      # Test projects
+├── SUPABASE/                   # Supabase configuration and migrations
+└── Directory.Packages.props    # Central package management
+```
+
+## 🔧 Getting Started
+
+### Prerequisites
+
+- .NET 9.0 SDK
+- Supabase account (optional - fallback mode available)
+
+### Local Development
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/ramrevanur/richmove-smartpay.git
+   cd richmove-smartpay
+   ```
+
+2. **Configure secrets (optional for Supabase integration):**
+   ```bash
+   # Copy sample secrets
+   cp secrets/SMARTPAY-RED.secrets.env.sample secrets/SMARTPAY-RED.secrets.env
+   # Edit with your Supabase credentials
+   ```
+
+3. **Run the application:**
+   ```bash
+   cd ZEN
+   dotnet run --project SOURCE/Api
+   ```
+
+4. **Access the API:**
+   - Swagger UI: `https://localhost:5001/swagger`
+   - Health checks: `https://localhost:5001/health/live`
+   - Database health: `https://localhost:5001/v1/health/db`
+
+### Configuration Modes
+
+#### Supabase Mode (Production)
+```json
+{
+  "Supabase": {
+    "Enabled": true,
+    "Url": "https://your-project.supabase.co",
+    "Key": "your-anon-key"
+  }
+}
+```
+
+#### Fallback Mode (Development)
+```json
+{
+  "Supabase": {
+    "Enabled": false
+  },
+  "FX": {
+    "Pricing": {
+      "MarkupBps": 25,
+      "FixedFeeMinorUnits": 99
+    }
+  }
+}
+```
+
+## 📊 API Endpoints
+
+### Core Services
+- `GET /` - Service information
+- `GET /health/live` - Liveness check
+- `GET /health/ready` - Readiness check
+- `GET /v1/health/db` - Database connectivity (when Supabase enabled)
+
+### Foreign Exchange
+- `POST /api/fx/quote` - Generate FX quote
+  ```json
+  {
+    "fromCurrency": "USD",
+    "toCurrency": "GBP",
+    "amount": 1000
+  }
+  ```
+
+### Shop Integration
+- `GET /api/shop/info` - Shop information (placeholder for future development)
+
+## 🧪 Testing
+
+### Run Tests
 ```bash
-npm i supabase --save-dev
+dotnet test
 ```
 
-To install the beta release channel:
-
+### Coverage Reports
 ```bash
-npm i supabase@beta --save-dev
+dotnet test --collect:"XPlat Code Coverage"
 ```
 
-When installing with yarn 4, you need to disable experimental fetch with the following nodejs config.
+The CI/CD pipeline enforces a minimum 60% test coverage threshold.
 
-```
-NODE_OPTIONS=--no-experimental-fetch yarn add supabase
-```
+## 🚀 Deployment
 
-> **Note**
-For Bun versions below v1.0.17, you must add `supabase` as a [trusted dependency](https://bun.sh/guides/install/trusted) before running `bun add -D supabase`.
+### GitHub Actions
 
-<details>
-  <summary><b>macOS</b></summary>
+The project includes a comprehensive CI/CD pipeline:
 
-  Available via [Homebrew](https://brew.sh). To install:
+- **Build verification** on all PRs and pushes to main branches
+- **Test execution** with coverage collection
+- **Coverage enforcement** (60% minimum threshold)
+- **Artifact upload** for coverage reports
 
-  ```sh
-  brew install supabase/tap/supabase
-  ```
+### Supabase Setup
 
-  To install the beta release channel:
-  
-  ```sh
-  brew install supabase/tap/supabase-beta
-  brew link --overwrite supabase-beta
-  ```
-  
-  To upgrade:
+1. Create a Supabase project
+2. Run the included migrations from `ZEN/SUPABASE/migrations/`
+3. Configure environment variables with your Supabase credentials
 
-  ```sh
-  brew upgrade supabase
-  ```
-</details>
+## 📈 Roadmap
 
-<details>
-  <summary><b>Windows</b></summary>
+### WP3: Payment Provider Integration
+- Multi-provider payment processing
+- Provider failover and routing
+- Transaction state management
 
-  Available via [Scoop](https://scoop.sh). To install:
+### WP4: Advanced Features
+- Real-time notifications
+- Advanced analytics dashboard
+- Multi-tenant support
 
-  ```powershell
-  scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
-  scoop install supabase
-  ```
+## 🤝 Contributing
 
-  To upgrade:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Ensure tests pass and coverage meets threshold
+5. Submit a pull request
 
-  ```powershell
-  scoop update supabase
-  ```
-</details>
+## 📄 License
 
-<details>
-  <summary><b>Linux</b></summary>
+This project is proprietary software conceived and specified by Ram Revanur.
 
-  Available via [Homebrew](https://brew.sh) and Linux packages.
+## 🎯 Development Philosophy
 
-  #### via Homebrew
+This project follows a **"Red-First"** development strategy:
+- **RED environment**: Free Supabase tier for development and testing
+- **GREEN environment**: Paid tier for production workloads
+- **Cost-conscious scaling**: Automatic tier management based on usage
 
-  To install:
-
-  ```sh
-  brew install supabase/tap/supabase
-  ```
-
-  To upgrade:
-
-  ```sh
-  brew upgrade supabase
-  ```
-
-  #### via Linux packages
-
-  Linux packages are provided in [Releases](https://github.com/supabase/cli/releases). To install, download the `.apk`/`.deb`/`.rpm`/`.pkg.tar.zst` file depending on your package manager and run the respective commands.
-
-  ```sh
-  sudo apk add --allow-untrusted <...>.apk
-  ```
-
-  ```sh
-  sudo dpkg -i <...>.deb
-  ```
-
-  ```sh
-  sudo rpm -i <...>.rpm
-  ```
-
-  ```sh
-  sudo pacman -U <...>.pkg.tar.zst
-  ```
-</details>
-
-<details>
-  <summary><b>Other Platforms</b></summary>
-
-  You can also install the CLI via [go modules](https://go.dev/ref/mod#go-install) without the help of package managers.
-
-  ```sh
-  go install github.com/supabase/cli@latest
-  ```
-
-  Add a symlink to the binary in `$PATH` for easier access:
-
-  ```sh
-  ln -s "$(go env GOPATH)/bin/cli" /usr/bin/supabase
-  ```
-
-  This works on other non-standard Linux distros.
-</details>
-
-<details>
-  <summary><b>Community Maintained Packages</b></summary>
-
-  Available via [pkgx](https://pkgx.sh/). Package script [here](https://github.com/pkgxdev/pantry/blob/main/projects/supabase.com/cli/package.yml).
-  To install in your working directory:
-
-  ```bash
-  pkgx install supabase
-  ```
-
-  Available via [Nixpkgs](https://nixos.org/). Package script [here](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/tools/supabase-cli/default.nix).
-</details>
-
-### Run the CLI
-
-```bash
-supabase bootstrap
-```
-
-Or using npx:
-
-```bash
-npx supabase bootstrap
-```
-
-The bootstrap command will guide you through the process of setting up a Supabase project using one of the [starter](https://github.com/supabase-community/supabase-samples/blob/main/samples.json) templates.
-
-## Docs
-
-Command & config reference can be found [here](https://supabase.com/docs/reference/cli/about).
-
-## Breaking changes
-
-We follow semantic versioning for changes that directly impact CLI commands, flags, and configurations.
-
-However, due to dependencies on other service images, we cannot guarantee that schema migrations, seed.sql, and generated types will always work for the same CLI major version. If you need such guarantees, we encourage you to pin a specific version of CLI in package.json.
-
-## Developing
-
-To run from source:
-
-```sh
-# Go >= 1.22
-go run . help
-```
+Built with ❤️ by the RichMove.SmartPay team

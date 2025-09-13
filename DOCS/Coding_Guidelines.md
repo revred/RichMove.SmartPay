@@ -47,6 +47,31 @@ ZEN/
 
 ---
 
+## Language Policy
+
+### Approved Languages
+- **C# (.NET 9.0)** - Primary development language for all application code
+- **Git Bash Scripts** - Automation and tooling scripts placed in `ZEN/TOOLS/`
+
+### Prohibited Languages
+- Python scripts (except existing CI/CD pipeline components)
+- JavaScript/TypeScript for backend development
+- PowerShell scripts
+- Other scripting languages
+
+**Rationale:**
+- Maintain consistency across the codebase
+- Leverage .NET ecosystem and tooling
+- Ensure all team members can maintain and extend the codebase
+- Simplify CI/CD and deployment processes
+
+### Script Placement
+- All automation scripts must be placed in `ZEN/TOOLS/`
+- Scripts must have `.sh` extension for git bash compatibility
+- Scripts must include proper shebang: `#!/bin/bash`
+
+---
+
 ## C# Coding Standards
 
 ### Language Features

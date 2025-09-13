@@ -10,7 +10,7 @@ namespace RichMove.SmartPay.Api.Endpoints.Health;
 /// Performs a lightweight DB connectivity check when Supabase is enabled.
 /// GET /v1/health/db
 /// </summary>
-public sealed class DbEndpoint : EndpointWithoutRequest<DbHealthResponse>
+internal sealed class DbEndpoint : EndpointWithoutRequest<DbHealthResponse>
 {
     private readonly IOptions<SupabaseOptions> _supa;
     private readonly IServiceProvider _sp;
@@ -29,7 +29,6 @@ public sealed class DbEndpoint : EndpointWithoutRequest<DbHealthResponse>
         {
             s.Summary = "Database connectivity health";
             s.Description = "Checks basic DB connectivity/status when Supabase is enabled.";
-            s.Tags = new[] { "health" };
         });
     }
 
@@ -59,7 +58,7 @@ public sealed class DbEndpoint : EndpointWithoutRequest<DbHealthResponse>
             var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
             resp.Connected = (result is int i && i == 1) || $"{result}" == "1";
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             resp.Error = ex.GetType().Name + ": " + ex.Message;
             resp.Connected = false;
@@ -73,7 +72,7 @@ public sealed class DbEndpoint : EndpointWithoutRequest<DbHealthResponse>
     }
 }
 
-public sealed class DbHealthResponse
+internal sealed class DbHealthResponse
 {
     public bool SupabaseEnabled { get; init; }
     public bool Connected { get; set; }

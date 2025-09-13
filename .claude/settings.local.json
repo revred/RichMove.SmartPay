@@ -28,7 +28,9 @@
       "Bash(source:*)",
       "Bash(set +a)",
       "Bash(zip:*)",
-      "Bash(where 7z)"
+      "Bash(where 7z)",
+      "Bash(xargs cat:*)",
+      "Bash(bash:*)"
     ],
     "deny": [],
     "ask": []
