@@ -28,6 +28,15 @@ internal sealed class CreateFxQuoteEndpoint : Endpoint<FxQuoteRequest, FxQuoteRe
 
     public override async Task HandleAsync(FxQuoteRequest req, CancellationToken ct)
     {
+        // Basic validation
+        if (string.IsNullOrWhiteSpace(req.FromCurrency) || req.FromCurrency.Length != 3 ||
+            string.IsNullOrWhiteSpace(req.ToCurrency) || req.ToCurrency.Length != 3 ||
+            req.Amount <= 0)
+        {
+            await SendErrorsAsync(400, ct).ConfigureAwait(false);
+            return;
+        }
+
         var quote = await _provider.GetQuoteAsync(req, ct).ConfigureAwait(false);
         await SendOkAsync(quote, ct).ConfigureAwait(false);
     }

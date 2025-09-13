@@ -10,8 +10,6 @@
   <ItemGroup>
     <PackageReference Include="FastEndpoints" />
     <PackageReference Include="FastEndpoints.Swagger" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-    <PackageReference Include="Swashbuckle.AspNetCore" />
     <!-- Needed for typed access to NpgsqlDataSource in Program.cs -->
     <PackageReference Include="Npgsql" />
   </ItemGroup>
