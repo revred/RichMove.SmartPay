@@ -1,0 +1,615 @@
+diff --git a/REVIEW/CodeReview/ChatGPT/TopN/20250913/2328_TOP50.md b/REVIEW/CodeReview/ChatGPT/TopN/20250913/2328_TOP50.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/TopN/20250913/2328_TOP50.md
+@@ -0,0 +1,241 @@
++# WP1 + WP2 Review — Top 50 impact moves
++
++> Scope: DoD compliance, alignment with initial goals (80% Shopify-equivalent + low-cost FX via SPI), plus new blockchain infra (bonus). Ranked by impact/effort.
++
++## A. Architecture & Coupling
++1. **Adopt a clean “Core–Application–Infrastructure–API” layering** (Core already exists); add `Application` for use-cases and orchestration to reduce leakage from infra into Core.
++2. **Introduce domain events + outbox** in Core (no broker commit yet) to decouple side effects (Shopify sync, FX quote persisted, blockchain receipt emission).
++3. **Add `IClock` and `IIdGenerator`** abstractions for deterministic tests (no `DateTime.UtcNow` in Core).
++4. **Use `Result<T>`/error codes over exceptions** at boundaries for predictable API failures; map to RFC7807 (ProblemDetails).
++5. **Feature flags**: formalize `FeatureFlags` (incl. `BlockchainEnabled`, `QuotesCacheEnabled`, `RateLimitEnabled`) – configured via `appsettings` and injected via `IOptions`.
++6. **Boundary contracts**: publish OpenAPI (small surface, versioned `/api/v1`) + JSON Schemas for canonical request/response and event payloads.
++7. **Provider model** for FX, KYC, Payments – swap `Null*` with `*Provider` implementations (Shopify, Wise, etc.) behind interfaces; add `InMemory*` for dev.
++8. **Telemetry**: wire OpenTelemetry (traces + metrics + logs) via `ILogger` + `ActivitySource` with semantic conventions (`richmove.smartpay.*`), exporter TBD.
++9. **Idempotency keys** at write endpoints (header `Idempotency-Key`) with 24‑hour replay cache; documented behavior.
++10. **Request size & model binding guards** in API; cap JSON payloads and reject unexplained fields (strict `JsonSerializerOptions`).
++
++## B. API Design & DX
++11. **Problem Details middleware** default (501 for disabled features, 400 for validation, 409 for idempotency conflicts).
++12. **Health endpoints hardened**: `/health/live` (deps: none), `/health/ready` (config validated + keystore reachable when enabled).
++13. **Rate limiting policy** (token bucket/ASP.NET built-in) for public APIs; exempt health and internal calls.
++14. **Consistent versioning**: prefix routes with `/api/v1`; reserve `/internal/*` for admin/maintenance.
++15. **Correlation IDs** (`X-Correlation-Id`) echoed back, logged, and propagated to providers.
++16. **Paging defaults** for list endpoints; enforce maximum page size; link headers.
++
++## C. Blockchain (optional, cleanly isolated)
++17. **Define `IBlockchainLedger`** in Core; provide `NullBlockchainLedger` (default), `InMemoryBlockchainLedger` (dev), and placeholder `EthereumNethereumLedger` (not wired).
++18. **Receipt model**: `TxnId`, `BlockId`, `Timestamp`, `Status`, `Checksum`, `Metadata`.
++19. **Key management**: document HSM/managed KMS strategy; forbid private keys in repo; keystore sealed behind interface.
++20. **Event emission**: only upon confirmed business events (e.g., FX conversion executed) – never on user input alone.
++21. **Back-pressure control**: queue writes; publish metrics (queue depth, latency, fail rate) – feature flag controlled.
++22. **Replay & audit**: deterministic hashing of business event canonical JSON before chain write; checksum stored off-chain.
++
++## D. Testing (beyond line coverage)
++23. **Contract tests (JSON Schema)**: validate requests/responses against `DOCS/API/schemas/*.json`; include canonical examples.
++24. **Mutation testing**: keep Stryker (already scaffolded) but set achievable gates (e.g., high: 70, low: 60) until domain grows.
++25. **Property-based tests** (FsCheck-lite style without dep): input generators for FX amounts/currencies to find edge cases.
++26. **Golden-files/approval tests** for price rounding and fees computation (deterministic via `IClock`).
++27. **Integration tests** for DI graph and feature flags permutations (`BlockchainEnabled` on/off, etc.).
++28. **Load smoke**: micro “burst” test (~100 rps for 30s) with minimal harness; fail if p99 > 200ms on Null providers.
++29. **Test data builders**: factory helpers for requests & domain entities to cut duplication.
++30. **Testing guidelines** doc: what to test, what not; examples; review checklist tied to DoD.
++
++## E. Security & Compliance
++31. **Gitleaks config** tuned; add allowlist for test keys; CI gate.
++32. **DPIA & Threat Model** diagrams (Mermaid) versioned with ADR links; explicit mitigations & owners.
++33. **Least‑priv env vars**: whitelist required settings per component; fail fast on unknowns.
++34. **Pseudonymize PII in logs**; make `PII.Redaction` helper mandatory at API boundary.
++35. **Input validation** (currencies, amounts, ISO codes) centralized; reject Unicode confusables.
++36. **Dependency baseline**: lock transitive versions; weekly vuln scan action; update playbook.
++
++## F. Performance & Reliability
++37. **Benchmarks** (BenchmarkDotNet) for critical hotspots (serialization, hashing); store results in `DOCS/benchmarks/`.
++38. **Caching**: in‑proc memo for static metadata (currencies, fees); TTL & invalidation policy; opt‑in via flag.
++39. **Retry & circuit breaker** policy for external providers (Polly or homegrown minimal variant).
++40. **Graceful shutdown**: ensure background queues drain within deadline; emit final metrics on stop.
++
++## G. CI/CD & Repo Hygiene
++41. **API contract lint** (Spectral) on PRs; block breaking changes unless version bumped.
++42. **Release Drafter** with semver and change categories; publish release notes automatically.
++43. **Dotnet format** check retained; add analyzers rule set tuned for our style (warn‑as‑error in Release).
++44. **Solution integrity check**: ensure all projects buildable; prevent orphaned projects.
++45. **Make targets**: `make test`, `make lint`, `make bench`, `make docs` – single entry for devs.
++
++## H. Documentation & Ops
++46. **DoD/DoR one‑pager** per WP with explicit acceptance checks & “no‑go” gates.
++47. **Architecture Decision Records**: feature‑flagging, blockchain optionality, idempotency, OpenAPI versioning.
++48. **Runbooks**: on-call quick fixes (rotate keys, pause blockchain, bump rate limits) with exact commands.
++49. **Error catalog**: map domain errors → ProblemDetails `type` URIs and `code`s.
++50. **Partner integration playbooks**: Shopify/Wise/Supabase; scopes, webhooks, rate limits, test creds.
++
++---
++**Next WP suggestion:** *WP3 — Platform Hardening*: finish feature flags, ProblemDetails, contract tests, and provider stubs; time‑box blockchain integration to “off by default”.
++
++
+diff --git a/DOCS/API/SmartPay.OpenAPI.yaml b/DOCS/API/SmartPay.OpenAPI.yaml
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/DOCS/API/SmartPay.OpenAPI.yaml
+@@ -0,0 +1,150 @@
++openapi: 3.0.3
++info:
++  title: RichMove SmartPay API
++  version: 1.0.0
++  description: |
++    Minimal v1 surface for MVP. Versioned routes under `/api/v1`.
++servers:
++  - url: https://api.richmove.local
++paths:
++  /api/v1/health/live:
++    get:
++      summary: Liveness probe
++      responses:
++        '200': { description: OK }
++  /api/v1/health/ready:
++    get:
++      summary: Readiness probe
++      responses:
++        '200': { description: Ready }
++        '503': { description: Not Ready }
++  /api/v1/fx/quote:
++    post:
++      summary: Get an indicative FX quote
++      requestBody:
++        required: true
++        content:
++          application/json:
++            schema:
++              $ref: '#/components/schemas/FxQuoteRequest'
++      responses:
++        '200':
++          description: Quote
++          content:
++            application/json:
++              schema:
++                $ref: '#/components/schemas/FxQuoteResult'
++        '400': { description: Validation error }
++        '501': { description: Feature disabled }
++components:
++  schemas:
++    FxQuoteRequest:
++      type: object
++      additionalProperties: false
++      required: [baseCurrency, quoteCurrency, amount]
++      properties:
++        baseCurrency: { type: string, pattern: '^[A-Z]{3}$' }
++        quoteCurrency: { type: string, pattern: '^[A-Z]{3}$' }
++        amount: { type: number, minimum: 0.01 }
++        clientId: { type: string, maxLength: 64 }
++        correlationId: { type: string, maxLength: 64 }
++    FxQuoteResult:
++      type: object
++      additionalProperties: false
++      required: [rate, baseCurrency, quoteCurrency, amount, expiresAtUtc]
++      properties:
++        rate: { type: number, minimum: 0 }
++        baseCurrency: { type: string }
++        quoteCurrency: { type: string }
++        amount: { type: number, minimum: 0 }
++        fees: { type: number, minimum: 0 }
++        expiresAtUtc: { type: string, format: date-time }
++        provider: { type: string }
++
+diff --git a/DOCS/SECURITY/ThreatModel.mmd b/DOCS/SECURITY/ThreatModel.mmd
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/DOCS/SECURITY/ThreatModel.mmd
+@@ -0,0 +1,62 @@
++%% Mermaid threat model (high-level)
++flowchart TB
++  subgraph Client
++    U[User]-->API
++  end
++  subgraph SmartPay
++    API[/API Gateway/]-->APP[(Application Layer)]
++    APP-->CORE{{Core Domain}}
++    APP-->PROV[External Providers]
++    PROV<-->FX[(FX Provider)]
++    PROV<-->SHOP[(Shopify)]
++    APP-->LEDGER[(Blockchain Ledger? - Flagged)]
++  end
++  subgraph Infra
++    DB[(Database)]-->APP
++    KMS[(Key Mgmt/HSM)]-->APP
++    MQ[(Outbox/Queue)]-->APP
++  end
++
++  %% Trust boundaries
++  classDef boundary stroke:#999,stroke-dasharray: 5 5;
++
++  %% Notes
++  %% Threats: Injection, Broken AuthZ, Sensitive Data Exposure, SSRF, Replay
++  %% Mitigations: Input validation, strong scopes, PII redaction, egress allowlists, idempotency keys
++
+diff --git a/PLAN/StageGates/DoD-Checklist.md b/PLAN/StageGates/DoD-Checklist.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/PLAN/StageGates/DoD-Checklist.md
+@@ -0,0 +1,97 @@
++# Definition of Done — Universal Checklist
++
++**Build & Quality**
++- [ ] All projects build in Release with `-warnaserror`.
++- [ ] Unit + integration tests added/updated; flakiness < 1%.
++- [ ] Mutation baseline recorded; no regressions.
++
++**Contracts & Compatibility**
++- [ ] OpenAPI updated; breaking changes versioned.
++- [ ] JSON Schemas updated; examples added.
++- [ ] ProblemDetails catalog updated.
++
++**Security & Compliance**
++- [ ] Secrets via env/KeyVault; never in code.
++- [ ] DPIA & Threat Model delta reviewed.
++- [ ] Dependencies scanned; criticals remediated.
++
++**Operational Readiness**
++- [ ] Logs + metrics + traces wired.
++- [ ] Runbooks updated; rollback steps verified.
++- [ ] Feature flags defaulted correctly (blockchain OFF unless required).
++
++**Docs**
++- [ ] ADR created/updated when decisions change.
++- [ ] README/WPS updated for new flows.
++
+diff --git a/WPS/WP3_PlatformHardening.md b/WPS/WP3_PlatformHardening.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/WPS/WP3_PlatformHardening.md
+@@ -0,0 +1,118 @@
++# WP3 — Platform Hardening (Post WP1+WP2)
++
++## Goals
++1) Lock the contract & error model, 2) finish feature‑flag plumbing (esp. blockchain OFF-by-default), 3) land schema‑based contract tests, 4) stabilize CI gates.
++
++## Deliverables
++- Feature flags bound from config; validated on startup.
++- ProblemDetails middleware default for all errors.
++- JSON Schemas + passing schema tests for public payloads.
++- Minimal provider stubs; Null & InMemory defaults.
++- CI: api‑contract lint, secret scan, format check.
++
++## Tasks
++- [ ] Add `FeatureFlags` POCO + DI registration.
++- [ ] Add `UnhandledExceptionMiddleware` + `UseProblemDetails()` extension.
++- [ ] Publish OpenAPI + schemas; script `make contracts`.
++- [ ] Add schema tests in `Core.Tests` (no extra deps).
++- [ ] Add `IClock`, `IIdGenerator` in Core.
++- [ ] Introduce `IBlockchainLedger` + Null/InMemory impls.
++- [ ] Document ADRs for flags, idempotency, ledger.
++- [ ] CI: add spectral lint & release drafter.
++- [ ] Write runbooks for toggling features safely.
++
++## Acceptance (DoD)
++- All tests pass; new tests cover contracts.
++- API returns RFC7807 on all unhandled errors.
++- Ledger writes only when flag enabled.
++
+diff --git a/.github/workflows/api-contract.yml b/.github/workflows/api-contract.yml
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/.github/workflows/api-contract.yml
+@@ -0,0 +1,58 @@
++name: api-contract
++on:
++  pull_request:
++    branches: [ "master", "main" ]
++jobs:
++  spectral:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Setup Node
++        uses: actions/setup-node@v4
++        with:
++          node-version: '20'
++      - name: Install Spectral
++        run: npm i -g @stoplight/spectral-cli
++      - name: Lint OpenAPI
++        run: spectral lint DOCS/API/SmartPay.OpenAPI.yaml --fail-severity=warn
++
+diff --git a/SECURITY/gitleaks.toml b/SECURITY/gitleaks.toml
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/SECURITY/gitleaks.toml
+@@ -0,0 +1,40 @@
++# Minimal tuning for test keys & false positives
++title = "gitleaks config"
++[[rules]]
++id = "generic-api-key"
++description = "Generic API Key"
++regex = '''(?i)(api|secret|token)[\s:=]{0,3}["']?[a-z0-9_\-]{16,}["']?'''
++tags = ["key","api","generic"]
++[allowlist]
++description = "Allow test fixtures"
++paths = [
++  '''ZEN/TESTS/.*\.json$''',
++  '''DOCS/.*\.md$''',
++]
++
+diff --git a/ZEN/SOURCE/Api/FeatureFlags.cs b/ZEN/SOURCE/Api/FeatureFlags.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Api/FeatureFlags.cs
+@@ -0,0 +1,35 @@
++using System;
++
++namespace RichMove.SmartPay.Api;
++
++public sealed class FeatureFlags
++{
++    public bool BlockchainEnabled { get; init; } = false;
++    public bool QuotesCacheEnabled { get; init; } = false;
++    public bool RateLimitEnabled { get; init; } = true;
++}
++
+diff --git a/ZEN/SOURCE/Api/Middleware/ProblemDetailsExtensions.cs b/ZEN/SOURCE/Api/Middleware/ProblemDetailsExtensions.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Middleware/ProblemDetailsExtensions.cs
+@@ -0,0 +1,89 @@
++using System;
++using System.Net;
++using System.Text.Json;
++using System.Threading.Tasks;
++using Microsoft.AspNetCore.Builder;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Logging;
++
++namespace RichMove.SmartPay.Api.Middleware;
++
++public static class ProblemDetailsExtensions
++{
++    public static IApplicationBuilder UseProblemDetails(this IApplicationBuilder app, ILogger logger)
++    {
++        return app.Use(async (ctx, next) =>
++        {
++            try
++            {
++                await next();
++                if (ctx.Response.StatusCode == (int)HttpStatusCode.NotImplemented)
++                {
++                    await WriteProblem(ctx, "about:blank/not-implemented", "Feature not implemented", "This API is currently disabled.", HttpStatusCode.NotImplemented);
++                }
++            }
++            catch (OperationCanceledException)
++            {
++                ctx.Response.StatusCode = (int)HttpStatusCode.RequestTimeout;
++                await WriteProblem(ctx, "about:blank/timeout", "Request timed out", "The request was cancelled or timed out.", HttpStatusCode.RequestTimeout);
++            }
++            catch (Exception ex)
++            {
++                logger.LogError(ex, "Unhandled exception");
++                ctx.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
++                await WriteProblem(ctx, "about:blank/unhandled", "Unhandled error", "An unexpected error occurred.", HttpStatusCode.InternalServerError);
++            }
++        });
++    }
++
++    private static Task WriteProblem(HttpContext ctx, string type, string title, string detail, HttpStatusCode status)
++    {
++        ctx.Response.ContentType = "application/problem+json";
++        var payload = new
++        {
++            type,
++            title,
++            status = (int)status,
++            detail,
++            traceId = ctx.TraceIdentifier
++        };
++        return ctx.Response.WriteAsync(JsonSerializer.Serialize(payload));
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Middleware/UnhandledExceptionMiddleware.cs b/ZEN/SOURCE/Api/Middleware/UnhandledExceptionMiddleware.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Middleware/UnhandledExceptionMiddleware.cs
+@@ -0,0 +1,63 @@
++using System;
++using System.Net;
++using System.Text.Json;
++using System.Threading.Tasks;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Logging;
++
++namespace RichMove.SmartPay.Api.Middleware;
++
++public sealed class UnhandledExceptionMiddleware
++{
++    private readonly RequestDelegate _next;
++    private readonly ILogger<UnhandledExceptionMiddleware> _logger;
++
++    public UnhandledExceptionMiddleware(RequestDelegate next, ILogger<UnhandledExceptionMiddleware> logger)
++    {
++        _next = next;
++        _logger = logger;
++    }
++
++    public async Task Invoke(HttpContext context)
++    {
++        try
++        {
++            await _next(context);
++        }
++        catch (Exception ex)
++        {
++            _logger.LogError(ex, "Unhandled exception");
++            context.Response.ContentType = "application/problem+json";
++            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
++            var problem = new
++            {
++                type = "about:blank/unhandled",
++                title = "Unhandled error",
++                status = context.Response.StatusCode,
++                traceId = context.TraceIdentifier
++            };
++            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
++        }
++    }
++}
++
+diff --git a/ZEN/SOURCE/Core/Abstractions/IClock.cs b/ZEN/SOURCE/Core/Abstractions/IClock.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Core/Abstractions/IClock.cs
+@@ -0,0 +1,9 @@
++using System;
++
++namespace RichMove.SmartPay.Core.Abstractions;
++
++public interface IClock
++{
++    DateTime UtcNow { get; }
++}
++
+diff --git a/ZEN/SOURCE/Core/Abstractions/IIdGenerator.cs b/ZEN/SOURCE/Core/Abstractions/IIdGenerator.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Core/Abstractions/IIdGenerator.cs
+@@ -0,0 +1,8 @@
++namespace RichMove.SmartPay.Core.Abstractions;
++
++public interface IIdGenerator
++{
++    string NewId();
++}
++
+diff --git a/ZEN/SOURCE/Core/Blockchain/IBlockchainLedger.cs b/ZEN/SOURCE/Core/Blockchain/IBlockchainLedger.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Core/Blockchain/IBlockchainLedger.cs
+@@ -0,0 +1,30 @@
++using System;
++using System.Threading;
++using System.Threading.Tasks;
++
++namespace RichMove.SmartPay.Core.Blockchain;
++
++public enum LedgerStatus { Disabled, Accepted, Confirmed, Failed }
++
++public sealed record LedgerReceipt(
++    string TxnId,
++    string? BlockId,
++    DateTime TimestampUtc,
++    LedgerStatus Status,
++    string Checksum,
++    string? Metadata);
++
++public interface IBlockchainLedger
++{
++    /// <summary>Append a canonical JSON payload to the ledger.</summary>
++    Task<LedgerReceipt> AppendAsync(string canonicalJson, CancellationToken ct = default);
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/NullBlockchainLedger.cs b/ZEN/SOURCE/Infrastructure/Blockchain/NullBlockchainLedger.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/NullBlockchainLedger.cs
+@@ -0,0 +1,32 @@
++using System;
++using System.Security.Cryptography;
++using System.Text;
++using System.Threading;
++using System.Threading.Tasks;
++using RichMove.SmartPay.Core.Blockchain;
++
++namespace RichMove.SmartPay.Infrastructure.Blockchain;
++
++public sealed class NullBlockchainLedger : IBlockchainLedger
++{
++    public Task<LedgerReceipt> AppendAsync(string canonicalJson, CancellationToken ct = default)
++    {
++        using var sha = SHA256.Create();
++        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(canonicalJson));
++        var checksum = Convert.ToHexString(hash);
++        var receipt = new LedgerReceipt(
++            TxnId: $"null-{Guid.NewGuid():N}",
++            BlockId: null,
++            TimestampUtc: DateTime.UtcNow,
++            Status: LedgerStatus.Disabled,
++            Checksum: checksum,
++            Metadata: "Ledger disabled via feature flag");
++        return Task.FromResult(receipt);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/InMemoryBlockchainLedger.cs b/ZEN/SOURCE/Infrastructure/Blockchain/InMemoryBlockchainLedger.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/InMemoryBlockchainLedger.cs
+@@ -0,0 +1,49 @@
++using System;
++using System.Collections.Concurrent;
++using System.Security.Cryptography;
++using System.Text;
++using System.Threading;
++using System.Threading.Tasks;
++using RichMove.SmartPay.Core.Blockchain;
++
++namespace RichMove.SmartPay.Infrastructure.Blockchain;
++
++public sealed class InMemoryBlockchainLedger : IBlockchainLedger
++{
++    private readonly ConcurrentQueue<string> _chain = new();
++
++    public Task<LedgerReceipt> AppendAsync(string canonicalJson, CancellationToken ct = default)
++    {
++        using var sha = SHA256.Create();
++        var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(canonicalJson));
++        var checksum = Convert.ToHexString(hash);
++        var blockId = Guid.NewGuid().ToString("N");
++        _chain.Enqueue($"{blockId}:{checksum}:{canonicalJson}");
++
++        var receipt = new LedgerReceipt(
++            TxnId: blockId,
++            BlockId: blockId,
++            TimestampUtc: DateTime.UtcNow,
++            Status: LedgerStatus.Confirmed,
++            Checksum: checksum,
++            Metadata: "In‑memory block appended (dev only)");
++
++        return Task.FromResult(receipt);
++    }
++}
++
+diff --git a/ZEN/TESTS/Core.Tests/Blockchain/NullLedgerTests.cs b/ZEN/TESTS/Core.Tests/Blockchain/NullLedgerTests.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/TESTS/Core.Tests/Blockchain/NullLedgerTests.cs
+@@ -0,0 +1,34 @@
++using System.Text.Json;
++using System.Threading.Tasks;
++using RichMove.SmartPay.Core.Blockchain;
++using RichMove.SmartPay.Infrastructure.Blockchain;
++using Xunit;
++
++namespace RichMove.SmartPay.Core.Tests.Blockchain;
++
++public class NullLedgerTests
++{
++    [Fact]
++    public async Task AppendAsync_ReturnsDisabledReceipt_WithChecksum()
++    {
++        var ledger = new NullBlockchainLedger();
++        var json = JsonSerializer.Serialize(new { type = "fx.executed", amount = 100, ccy = "GBP" });
++
++        var receipt = await ledger.AppendAsync(json);
++
++        Assert.NotNull(receipt);
++        Assert.NotNull(receipt.Checksum);
++        Assert.Equal(LedgerStatus.Disabled, receipt.Status);
++        Assert.StartsWith("null-", receipt.TxnId);
++    }
++}
++
+diff --git a/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2328_WP_1_AND_2_Review.NOTES.md b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2328_WP_1_AND_2_Review.NOTES.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2328_WP_1_AND_2_Review.NOTES.md
+@@ -0,0 +1,78 @@
++# Patch Notes — 2328_WP_1_AND_2_Review
++
++This patch **adds** (does not modify existing files) the scaffolding to deliver the most impactful improvements identified in the Top‑50 list:
++
++- Problem Details middleware and unhandled exception middleware (not auto‑wired; safe to add).
++- Feature flags POCO for binding.
++- Core abstractions (`IClock`, `IIdGenerator`) to enable deterministic tests.
++- Blockchain ledger interfaces + `Null` and `InMemory` implementations (OFF by default).
++- Contract artifacts (OpenAPI & Threat Model) and a minimal **api‑contract** workflow (Spectral).
++- DoD checklist and WP3 hardening plan.
++- Gitleaks tuning to reduce test-fixture false positives.
++
++### Safe Wiring Suggestions (follow‑up)
++1. In `Program.cs` (API), bind flags:
++   ```csharp
++   builder.Services.Configure<FeatureFlags>(builder.Configuration.GetSection("Features"));
++   app.UseMiddleware<UnhandledExceptionMiddleware>();
++   app.UseProblemDetails(app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ProblemDetails"));
++   ```
++2. Register ledger by flag:
++   ```csharp
++   var flags = app.Services.GetRequiredService<IOptions<FeatureFlags>>().Value;
++   if (flags.BlockchainEnabled)
++       services.AddSingleton<IBlockchainLedger, InMemoryBlockchainLedger>(); // or Ethereum*
++   else
++       services.AddSingleton<IBlockchainLedger, NullBlockchainLedger>();
++   ```
++3. Add schemas & examples for each public endpoint and wire spectral lint in CI PRs.
++
++Nothing in this patch changes runtime behavior until the above wiring is done.
++
++— ChatGPT (WP1+WP2 review)
++

@@ -1,0 +1,62 @@
+openapi: 3.0.3
+info:
+  title: RichMove SmartPay API
+  version: 1.0.0
+  description: |
+    Minimal v1 surface for MVP. Versioned routes under `/api/v1`.
+servers:
+  - url: https://api.richmove.local
+paths:
+  /api/v1/health/live:
+    get:
+      summary: Liveness probe
+      responses:
+        '200': { description: OK }
+  /api/v1/health/ready:
+    get:
+      summary: Readiness probe
+      responses:
+        '200': { description: Ready }
+        '503': { description: Not Ready }
+  /api/v1/fx/quote:
+    post:
+      summary: Get an indicative FX quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FxQuoteRequest'
+      responses:
+        '200':
+          description: Quote
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FxQuoteResult'
+        '400': { description: Validation error }
+        '501': { description: Feature disabled }
+components:
+  schemas:
+    FxQuoteRequest:
+      type: object
+      additionalProperties: false
+      required: [baseCurrency, quoteCurrency, amount]
+      properties:
+        baseCurrency: { type: string, pattern: '^[A-Z]{3}$' }
+        quoteCurrency: { type: string, pattern: '^[A-Z]{3}$' }
+        amount: { type: number, minimum: 0.01 }
+        clientId: { type: string, maxLength: 64 }
+        correlationId: { type: string, maxLength: 64 }
+    FxQuoteResult:
+      type: object
+      additionalProperties: false
+      required: [rate, baseCurrency, quoteCurrency, amount, expiresAtUtc]
+      properties:
+        rate: { type: number, minimum: 0 }
+        baseCurrency: { type: string }
+        quoteCurrency: { type: string }
+        amount: { type: number, minimum: 0 }
+        fees: { type: number, minimum: 0 }
+        expiresAtUtc: { type: string, format: date-time }
+        provider: { type: string }
