@@ -108,3 +108,10 @@ You should see:
 
 ## 7) Going live later
 - Create **smartpay-green** (PAID), push the same migrations, and switch API secrets to point at green.
+
+## 8) Encrypted Backup
+An encrypted backup of the secrets folder is available as `SECRETS.end`:
+- **Format**: 7z archive with .end extension
+- **Password**: Uses the custom API key from Supabase → Settings → API → Custom Keys → develop
+- **Contents**: Complete secrets folder with all sample files and documentation
+- **Usage**: Rename to `.7z` and extract with 7-zip using the custom API key as password

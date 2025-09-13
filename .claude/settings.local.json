@@ -23,7 +23,12 @@
       "Bash(tar:*)",
       "Bash(./supabase.exe --version)",
       "Bash(ZEN/TOOLS/supabase.exe:*)",
-      "Bash(./TOOLS/supabase.exe:*)"
+      "Bash(./TOOLS/supabase.exe:*)",
+      "Bash(set -a)",
+      "Bash(source:*)",
+      "Bash(set +a)",
+      "Bash(zip:*)",
+      "Bash(where 7z)"
     ],
     "deny": [],
     "ask": []
