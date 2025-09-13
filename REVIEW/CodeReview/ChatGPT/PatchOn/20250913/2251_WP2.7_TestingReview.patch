@@ -1,0 +1,270 @@
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/_Base/BlockchainEndpointBase.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/_Base/BlockchainEndpointBase.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/_Base/BlockchainEndpointBase.cs
+@@ -0,0 +1,39 @@
++using FastEndpoints;
++using Microsoft.AspNetCore.Http;
++using RichMove.SmartPay.Infrastructure.Blockchain;
++
++namespace RichMove.SmartPay.Api.Endpoints.Blockchain._Base;
++
++/// <summary>
++/// Base for blockchain endpoints. If the feature is disabled, responds with 404 and an explanatory header,
++/// so routes effectively "disappear" from the surface area.
++/// </summary>
++public abstract class BlockchainEndpoint<TRequest, TResponse> : Endpoint<TRequest, TResponse>
++{
++    private readonly IBlockchainGate _gate;
++
++    protected BlockchainEndpoint(IBlockchainGate gate) => _gate = gate;
++
++    public sealed override async Task HandleAsync(TRequest req, CancellationToken ct)
++    {
++        if (!_gate.Enabled)
++        {
++            HttpContext.Response.Headers["X-Feature-Disabled"] = "blockchain";
++            HttpContext.Response.StatusCode = StatusCodes.Status404NotFound;
++            return;
++        }
++
++        await HandleWhenEnabledAsync(req, ct);
++    }
++
++    protected abstract Task HandleWhenEnabledAsync(TRequest req, CancellationToken ct);
++}
++
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs
+index 6666666..7777777 100644
+--- a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs
+@@ -1,10 +1,10 @@
+ using FastEndpoints;
+-using RichMove.SmartPay.Infrastructure.Blockchain;
+ using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++using RichMove.SmartPay.Api.Endpoints.Blockchain._Base;
++using RichMove.SmartPay.Infrastructure.Blockchain;
+ 
+ namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
+ 
+ public sealed class CreateWalletRequest
+ {
+@@ -18,25 +18,21 @@ public sealed class CreateWalletResponse
+     public Guid WalletId { get; init; }
+ }
+ 
+-public sealed class CreateWalletEndpoint : Endpoint<CreateWalletRequest, CreateWalletResponse>
++public sealed class CreateWalletEndpoint : BlockchainEndpoint<CreateWalletRequest, CreateWalletResponse>
+ {
+-    private readonly IBlockchainGate _gate;
+     private readonly IWalletRepository _repo;
+ 
+-    public CreateWalletEndpoint(IBlockchainGate gate, IWalletRepository repo)
++    public CreateWalletEndpoint(IBlockchainGate gate, IWalletRepository repo) : base(gate)
+     {
+-        _gate = gate;
+         _repo = repo;
+     }
+ 
+     public override void Configure()
+     {
+         Post("/v1/chain/wallets");
+         AllowAnonymous();
+         Summary(s => {
+             s.Summary = "Create wallet record";
+             s.Description = "Adds a user or custodial wallet for a given chain/network";
+             s.Tags = new[] { "blockchain" };
+         });
+     }
+ 
+-    public override async Task HandleAsync(CreateWalletRequest req, CancellationToken ct)
++    protected override async Task HandleWhenEnabledAsync(CreateWalletRequest req, CancellationToken ct)
+     {
+-        if (!_gate.Enabled)
+-        {
+-            await SendAsync(new CreateWalletResponse(), 501, ct);
+-            return;
+-        }
+-
+         if (string.IsNullOrWhiteSpace(req.Address))
+         {
+             AddError(r => r.Address, "Address is required");
+             await SendErrorsAsync(cancellation: ct);
+             return;
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs
+index 7777777..8888888 100644
+--- a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs
+@@ -1,10 +1,10 @@
+ using FastEndpoints;
+-using RichMove.SmartPay.Infrastructure.Blockchain;
+ using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++using RichMove.SmartPay.Api.Endpoints.Blockchain._Base;
++using RichMove.SmartPay.Infrastructure.Blockchain;
+ 
+ namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
+ 
+ public sealed class CreateOnchainIntentRequest
+ {
+@@ -20,27 +20,21 @@ public sealed class CreateOnchainIntentResponse
+     public string Status { get; init; } = "CREATED";
+ }
+ 
+-public sealed class CreateOnchainIntentEndpoint : Endpoint<CreateOnchainIntentRequest, CreateOnchainIntentResponse>
++public sealed class CreateOnchainIntentEndpoint : BlockchainEndpoint<CreateOnchainIntentRequest, CreateOnchainIntentResponse>
+ {
+-    private readonly IBlockchainGate _gate;
+     private readonly IIntentRepository _repo;
+ 
+-    public CreateOnchainIntentEndpoint(IBlockchainGate gate, IIntentRepository repo)
++    public CreateOnchainIntentEndpoint(IBlockchainGate gate, IIntentRepository repo) : base(gate)
+     {
+-        _gate = gate;
+         _repo = repo;
+     }
+ 
+     public override void Configure()
+     {
+         Post("/v1/chain/intents/onchain");
+         AllowAnonymous();
+         Summary(s => {
+             s.Summary = "Create on-chain payment intent";
+             s.Description = "Creates a chain-agnostic payment intent (route='ONCHAIN')";
+             s.Tags = new[] { "blockchain" };
+         });
+     }
+ 
+-    public override async Task HandleAsync(CreateOnchainIntentRequest req, CancellationToken ct)
++    protected override async Task HandleWhenEnabledAsync(CreateOnchainIntentRequest req, CancellationToken ct)
+     {
+-        if (!_gate.Enabled)
+-        {
+-            await SendAsync(new CreateOnchainIntentResponse(), 501, ct);
+-            return;
+-        }
+-
+         if (req.AmountSource <= 0)
+         {
+             AddError(r => r.AmountSource, "AmountSource must be > 0");
+             await SendErrorsAsync(cancellation: ct);
+             return;
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs
+index 8888888..9999999 100644
+--- a/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs
+@@ -1,10 +1,10 @@
+ using FastEndpoints;
+-using RichMove.SmartPay.Infrastructure.Blockchain;
+ using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++using RichMove.SmartPay.Api.Endpoints.Blockchain._Base;
++using RichMove.SmartPay.Infrastructure.Blockchain;
+ 
+ namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
+ 
+ public sealed class IngestTxRequest
+ {
+@@ -26,28 +26,22 @@ public sealed class IngestTxResponse
+     public Guid? SettlementId { get; init; }
+ }
+ 
+-public sealed class IngestTxEndpoint : Endpoint<IngestTxRequest, IngestTxResponse>
++public sealed class IngestTxEndpoint : BlockchainEndpoint<IngestTxRequest, IngestTxResponse>
+ {
+-    private readonly IBlockchainGate _gate;
+     private readonly ITxRepository _repo;
+ 
+-    public IngestTxEndpoint(IBlockchainGate gate, ITxRepository repo)
++    public IngestTxEndpoint(IBlockchainGate gate, ITxRepository repo) : base(gate)
+     {
+-        _gate = gate;
+         _repo = repo;
+     }
+ 
+     public override void Configure()
+     {
+         Post("/v1/chain/tx/ingest");
+         AllowAnonymous();
+         Summary(s => {
+             s.Summary = "Ingest on-chain transaction";
+             s.Description = "Stores on-chain tx and optionally creates a settlement+legs for a payment intent";
+             s.Tags = new[] { "blockchain" };
+         });
+     }
+ 
+-    public override async Task HandleAsync(IngestTxRequest req, CancellationToken ct)
++    protected override async Task HandleWhenEnabledAsync(IngestTxRequest req, CancellationToken ct)
+     {
+-        if (!_gate.Enabled)
+-        {
+-            await SendAsync(new IngestTxResponse(), 501, ct);
+-            return;
+-        }
+-
+         if (string.IsNullOrWhiteSpace(req.TxHash))
+         {
+             AddError(r => r.TxHash, "TxHash is required");
+             await SendErrorsAsync(cancellation: ct);
+             return;
+diff --git a/DOCS/API_Spec_Skeleton.yaml b/DOCS/API_Spec_Skeleton.yaml
+index cccccc2..dddddd3 100644
+--- a/DOCS/API_Spec_Skeleton.yaml
++++ b/DOCS/API_Spec_Skeleton.yaml
+@@ -210,7 +210,7 @@ paths:
+         '200':
+           description: Wallet created (or already present)
+-        '501':
+-          description: Feature disabled
++        '404':
++          description: Feature disabled (route not available)
+ 
+   /v1/chain/intents/onchain:
+     post:
+@@ -221,8 +221,8 @@ paths:
+         '200':
+           description: Intent created
+         '400':
+           description: Validation error
+-        '501':
+-          description: Feature disabled
++        '404':
++          description: Feature disabled (route not available)
+ 
+   /v1/chain/tx/ingest:
+     post:
+@@ -232,8 +232,8 @@ paths:
+         '200':
+           description: Transaction stored (+ optional settlement)
+         '400':
+           description: Validation error
+-        '501':
+-          description: Feature disabled
++        '404':
++          description: Feature disabled (route not available)
+ 
+diff --git a/ZEN/TESTS/Api.Tests/BlockchainEndpointsTests.cs b/ZEN/TESTS/Api.Tests/BlockchainEndpointsTests.cs
+index ccccccD..eeeeeeE 100644
+--- a/ZEN/TESTS/Api.Tests/BlockchainEndpointsTests.cs
++++ b/ZEN/TESTS/Api.Tests/BlockchainEndpointsTests.cs
+@@ -1,7 +1,7 @@
+ using System.Net;
+@@ -40,16 +40,16 @@ public sealed class BlockchainEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
+-    [Fact]
+-    public async Task Endpoints_Return_501_When_Disabled()
++    [Fact]
++    public async Task Endpoints_Return_404_When_Disabled()
+     {
+         var client = Factory(supabaseEnabled: true, blockchainEnabled: false, useFakes: false).CreateClient();
+ 
+         var resp1 = await client.PostAsJsonAsync("/v1/chain/wallets", new { chainId = Guid.NewGuid(), address = "0xabc" });
+         var resp2 = await client.PostAsJsonAsync("/v1/chain/intents/onchain", new { sourceAssetId = Guid.NewGuid(), targetAssetId = Guid.NewGuid(), amountSource = 1.23m });
+         var resp3 = await client.PostAsJsonAsync("/v1/chain/tx/ingest", new { chainId = Guid.NewGuid(), txHash = "0xdeadbeef" });
+ 
+-        Assert.Equal(HttpStatusCode.NotImplemented, resp1.StatusCode);
+-        Assert.Equal(HttpStatusCode.NotImplemented, resp2.StatusCode);
+-        Assert.Equal(HttpStatusCode.NotImplemented, resp3.StatusCode);
++        Assert.Equal(HttpStatusCode.NotFound, resp1.StatusCode);
++        Assert.Equal(HttpStatusCode.NotFound, resp2.StatusCode);
++        Assert.Equal(HttpStatusCode.NotFound, resp3.StatusCode);
+     }
+ 

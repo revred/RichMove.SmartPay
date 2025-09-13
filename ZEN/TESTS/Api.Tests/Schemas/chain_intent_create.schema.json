@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intentId", "status"],
+  "properties": {
+    "intentId": { "type": "string", "format": "uuid" },
+    "status": { "type": "string", "minLength": 1 }
+  }
+}

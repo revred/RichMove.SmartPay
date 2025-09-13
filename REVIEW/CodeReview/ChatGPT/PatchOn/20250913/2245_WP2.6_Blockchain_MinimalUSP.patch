@@ -1,0 +1,586 @@
+diff --git a/DOCS/BlockChain_Future.md b/DOCS/BlockChain_Future.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/DOCS/BlockChain_Future.md
+@@ -0,0 +1,999 @@
+# Blockchain Future — Strategy, Milestones, and Minimal USP Wiring
+_Last updated: 2025-09-13 (UTC)_
+
+This document extends our organic, additive blockchain plan with a **minimal, isolated wiring** so we can
+*show* blockchain capability (our USP) **without increasing MVP complexity**. The code paths are **feature-flagged**
+and live in a separate vertical slice (`Blockchain/*` endpoints + repositories). If the feature flag is off, nothing changes.
+
+> **Key takeaway:** With the included patch, the API exposes **3 opt‑in endpoints** (wallet creation, on‑chain intent,
+> and transaction ingestion) that write to the blockchain-ready tables. If the flag is disabled, endpoints return a clear “disabled” response.  
+> The **database is already capable** of storing blockchain information; now the API has thin, isolated routes to use it when you opt in.
+
+---
+
+## Feature flag
+Set `Blockchain__Enabled=true` to enable the endpoints. Keep `false` for MVP.
+
+- Requires your Postgres (Supabase) connection to be enabled (we reuse the existing `NpgsqlDataSource`).
+
+### Endpoints (FastEndpoints, isolated)
+- `POST /v1/chain/wallets` → create a wallet record for a user (custodial or external).
+- `POST /v1/chain/intents/onchain` → create a chain-agnostic payment intent with `route='ONCHAIN'`.
+- `POST /v1/chain/tx/ingest` → ingest an observed on-chain transaction; optionally link it to an intent by creating
+  a settlement and legs (credit/fee) in one go.
+
+Each endpoint is designed to be **idempotent-ish** (e.g., `onchain_tx` uniqueness on `(chain_id, tx_hash)`), and—crucially—**does not change any existing routes**.
+
+---
+
+## Minimal data flow (when enabled)
+1. Create/record wallets (`/v1/chain/wallets`).
+2. Create a payment intent (`/v1/chain/intents/onchain`) with `source_asset_id`, `target_asset_id`, `amount_source`.
+3. When your indexer/webhook sees a transaction, call `/v1/chain/tx/ingest` → records `onchain_tx` and, if `intent_id` is provided, creates a `settlement` and `settlement_leg` rows tied to that tx.
+
+This flow is **optional** and can be left unused until you need it.
+
+---
+
+## What the patch does (recap)
+- Adds 3 new endpoints in a `Blockchain` area (completely separate from existing controllers).
+- Adds thin repositories that write into the `0003_blockchain_prep.sql` tables.
+- Adds a small feature flag section to `.env.example` (`Blockchain__Enabled=false` by default).
+- Updates this document to make the strategy and wiring explicit.
+
+> **Critical detail (do not lose this):** The **DB is capable of storing blockchain information now**.  
+> These endpoints simply make use of that capability when you flip the flag.
+
+---
+
+## Table motivations (from the prep doc, condensed)
+- **chain_network**: normalized networks (e.g., EVM mainnet/testnet), keeps chain details out of payments.
+- **asset**: unifies fiat and tokens; avoids crypto leaking into core payments; unique per `(code, chain, contract)`.
+- **wallet**: on-chain addresses by user/chain; supports EXTERNAL or CUSTODIAL.
+- **payment_intent**: describes *what* the user wants; route “ONCHAIN” vs “OFFCHAIN” is a switch, not a forked model.
+- **settlement / settlement_leg**: represents *how* it executed (multi-leg, fees, credits/debits).
+- **onchain_tx**: append-only envelope for observed transactions; unique `(chain_id, tx_hash)`.
+
+---
+
+## Safety & simplicity
+- Feature-flagged, isolated endpoints.
+- Uses the same Postgres pool (`NpgsqlDataSource`), no new infra.
+- Optional linking to intents; you can ingest tx without an intent first, then link via a settlement later.
+
+diff --git a/.env.example b/.env.example
+index eeeeee3..fffffe4 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1,5 +1,13 @@
+ SHOPIFY__ApiKey=changeme
+ SHOPIFY__Password=changeme
+ SHOPIFY__StoreDomain=mystore.myshopify.com
+ SHOPIFY__ApiVersion=2025-07
+ 
++# === Blockchain feature flag (isolated vertical slice) ===
++# Keep false for MVP; set true to enable /v1/chain/* endpoints
++Blockchain__Enabled=false
++
++
+ # === Environment selector (red-first) ===
+ # Allowed: red | green
+ Environment__Name=red
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/IBlockchainGate.cs b/ZEN/SOURCE/Infrastructure/Blockchain/IBlockchainGate.cs
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/IBlockchainGate.cs
+@@ -0,0 +1,22 @@
++using System.ComponentModel.DataAnnotations;
++
++namespace RichMove.SmartPay.Infrastructure.Blockchain;
++
++/// <summary>
++/// Feature gate for minimal blockchain endpoints. Keep the complexity isolated.
++/// </summary>
++public interface IBlockchainGate
++{
++    bool Enabled { get; }
++}
++
++public sealed class BlockchainGate : IBlockchainGate
++{
++    public BlockchainGate(IConfiguration cfg)
++    {
++        Enabled = string.Equals(cfg["Blockchain:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
++    }
++
++    public bool Enabled { get; }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/WalletRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/WalletRepository.cs
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/WalletRepository.cs
+@@ -0,0 +1,67 @@
++using Npgsql;
++
++namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++public sealed class WalletRepository
++{
++    private readonly NpgsqlDataSource _db;
++
++    public WalletRepository(NpgsqlDataSource db) => _db = db;
++
++    public async Task<Guid> CreateAsync(Guid chainId, string address, Guid? userId, string custody = "EXTERNAL",
++        string[]? tags = null, IDictionary<string, object>? metadata = null, CancellationToken ct = default)
++    {
++        var id = Guid.NewGuid();
++        const string sql = @"
++insert into public.wallet (id, user_id, chain_id, address, custody, tags, metadata)
++values (@id, @user_id, @chain_id, @address, @custody, @tags, @metadata)
++on conflict (chain_id, address) do nothing;";
++
++        await using var cmd = _db.CreateCommand(sql);
++        cmd.Parameters.AddWithValue("id", id);
++        cmd.Parameters.AddWithValue("user_id", userId.HasValue ? userId.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("chain_id", chainId);
++        cmd.Parameters.AddWithValue("address", address);
++        cmd.Parameters.AddWithValue("custody", custody);
++        cmd.Parameters.AddWithValue("tags", tags ?? Array.Empty<string>());
++        cmd.Parameters.AddWithValue("metadata", (metadata is null) ? "{}" : System.Text.Json.JsonSerializer.Serialize(metadata));
++        await cmd.ExecuteNonQueryAsync(ct);
++        return id;
++    }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IntentRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IntentRepository.cs
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IntentRepository.cs
+@@ -0,0 +1,65 @@
++using Npgsql;
++
++namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++public sealed class IntentRepository
++{
++    private readonly NpgsqlDataSource _db;
++
++    public IntentRepository(NpgsqlDataSource db) => _db = db;
++
++    public async Task<Guid> CreateAsync(Guid sourceAssetId, Guid targetAssetId, decimal amountSource,
++        string? quoteId, Guid? createdBy, string route = "ONCHAIN", string status = "CREATED",
++        string? idempotencyKey = null, CancellationToken ct = default)
++    {
++        var id = Guid.NewGuid();
++        const string sql = @"
++insert into public.payment_intent
++  (id, created_by, source_asset_id, target_asset_id, quote_id, amount_source, amount_target_expected, route, status, idempotency_key, metadata)
++values
++  (@id, @created_by, @source_asset_id, @target_asset_id, @quote_id, @amount_source, null, @route, @status, @idempotency_key, '{}'::jsonb);";
++
++        await using var cmd = _db.CreateCommand(sql);
++        cmd.Parameters.AddWithValue("id", id);
++        cmd.Parameters.AddWithValue("created_by", createdBy.HasValue ? createdBy.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("source_asset_id", sourceAssetId);
++        cmd.Parameters.AddWithValue("target_asset_id", targetAssetId);
++        cmd.Parameters.AddWithValue("quote_id", (object?)quoteId ?? DBNull.Value);
++        cmd.Parameters.AddWithValue("amount_source", amountSource);
++        cmd.Parameters.AddWithValue("route", route);
++        cmd.Parameters.AddWithValue("status", status);
++        cmd.Parameters.AddWithValue("idempotency_key", (object?)idempotencyKey ?? DBNull.Value);
++        await cmd.ExecuteNonQueryAsync(ct);
++        return id;
++    }
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/TxRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/TxRepository.cs
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/TxRepository.cs
+@@ -0,0 +1,129 @@
++using Npgsql;
++
++namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++public sealed class TxRepository
++{
++    private readonly NpgsqlDataSource _db;
++
++    public TxRepository(NpgsqlDataSource db) => _db = db;
++
++    public async Task<Guid> IngestTxAsync(Guid chainId, string txHash, Guid? fromWalletId, Guid? toWalletId,
++        Guid? assetId, decimal? amount, Guid? feeAssetId, decimal? feeAmount, long? blockNumber,
++        string status = "PENDING", IDictionary<string, object>? metadata = null, CancellationToken ct = default)
++    {
++        var id = Guid.NewGuid();
++        const string sql = @"
++insert into public.onchain_tx
++  (id, chain_id, tx_hash, from_wallet_id, to_wallet_id, asset_id, amount, fee_asset_id, fee_amount, block_number, status, first_seen, metadata)
++values
++  (@id, @chain_id, @tx_hash, @from_wallet_id, @to_wallet_id, @asset_id, @amount, @fee_asset_id, @fee_amount, @block_number, @status, now(), @metadata)
++on conflict (chain_id, tx_hash) do nothing;";
++
++        await using var cmd = _db.CreateCommand(sql);
++        cmd.Parameters.AddWithValue("id", id);
++        cmd.Parameters.AddWithValue("chain_id", chainId);
++        cmd.Parameters.AddWithValue("tx_hash", txHash);
++        cmd.Parameters.AddWithValue("from_wallet_id", fromWalletId.HasValue ? fromWalletId.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("to_wallet_id", toWalletId.HasValue ? toWalletId.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("asset_id", assetId.HasValue ? assetId.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("amount", amount.HasValue ? amount.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("fee_asset_id", feeAssetId.HasValue ? feeAssetId.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("fee_amount", feeAmount.HasValue ? feeAmount.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("block_number", blockNumber.HasValue ? blockNumber.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("status", status);
++        cmd.Parameters.AddWithValue("metadata", (metadata is null) ? "{}" : System.Text.Json.JsonSerializer.Serialize(metadata));
++        await cmd.ExecuteNonQueryAsync(ct);
++        return id;
++    }
++
++    public async Task<Guid> CreateSettlementAsync(Guid intentId, CancellationToken ct = default)
++    {
++        var id = Guid.NewGuid();
++        const string sql = @"insert into public.settlement (id, intent_id, status) values (@id, @intent_id, 'PENDING');";
++        await using var cmd = _db.CreateCommand(sql);
++        cmd.Parameters.AddWithValue("id", id);
++        cmd.Parameters.AddWithValue("intent_id", intentId);
++        await cmd.ExecuteNonQueryAsync(ct);
++        return id;
++    }
++
++    public async Task<Guid> CreateLegAsync(Guid settlementId, string legType, Guid assetId, decimal amount,
++        Guid? walletId, Guid? onchainTxId, IDictionary<string, object>? metadata = null, CancellationToken ct = default)
++    {
++        var id = Guid.NewGuid();
++        const string sql = @"
++insert into public.settlement_leg
++  (id, settlement_id, leg_type, asset_id, amount, wallet_id, onchain_tx_id, metadata)
++values
++  (@id, @settlement_id, @leg_type, @asset_id, @amount, @wallet_id, @onchain_tx_id, @metadata);";
++
++        await using var cmd = _db.CreateCommand(sql);
++        cmd.Parameters.AddWithValue("id", id);
++        cmd.Parameters.AddWithValue("settlement_id", settlementId);
++        cmd.Parameters.AddWithValue("leg_type", legType);
++        cmd.Parameters.AddWithValue("asset_id", assetId);
++        cmd.Parameters.AddWithValue("amount", amount);
++        cmd.Parameters.AddWithValue("wallet_id", walletId.HasValue ? walletId.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("onchain_tx_id", onchainTxId.HasValue ? onchainTxId.Value : (object)DBNull.Value);
++        cmd.Parameters.AddWithValue("metadata", (metadata is null) ? "{}" : System.Text.Json.JsonSerializer.Serialize(metadata));
++        await cmd.ExecuteNonQueryAsync(ct);
++        return id;
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs
+new file mode 100644
+index 0000000..6666666
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs
+@@ -0,0 +1,82 @@
++using FastEndpoints;
++using RichMove.SmartPay.Infrastructure.Blockchain;
++using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
++
++public sealed class CreateWalletRequest
++{
++    public Guid ChainId { get; init; }
++    public string Address { get; init; } = string.Empty;
++    public string Custody { get; init; } = "EXTERNAL"; // or CUSTODIAL
++    public string[]? Tags { get; init; }
++    public Guid? UserId { get; init; } // optional until auth is wired
++}
++
++public sealed class CreateWalletResponse
++{
++    public Guid WalletId { get; init; }
++}
++
++public sealed class CreateWalletEndpoint : Endpoint<CreateWalletRequest, CreateWalletResponse>
++{
++    private readonly IBlockchainGate _gate;
++    private readonly WalletRepository _repo;
++
++    public CreateWalletEndpoint(IBlockchainGate gate, WalletRepository repo)
++    {
++        _gate = gate;
++        _repo = repo;
++    }
++
++    public override void Configure()
++    {
++        Post("/v1/chain/wallets");
++        AllowAnonymous();
++        Summary(s => {
++            s.Summary = "Create wallet record";
++            s.Description = "Adds a user or custodial wallet for a given chain/network";
++            s.Tags = new[] { "blockchain" };
++        });
++    }
++
++    public override async Task HandleAsync(CreateWalletRequest req, CancellationToken ct)
++    {
++        if (!_gate.Enabled)
++        {
++            await SendAsync(new CreateWalletResponse(), 501, ct);
++            return;
++        }
++
++        if (string.IsNullOrWhiteSpace(req.Address))
++        {
++            AddError(r => r.Address, "Address is required");
++            await SendErrorsAsync(cancellation: ct);
++            return;
++        }
++
++        var id = await _repo.CreateAsync(req.ChainId, req.Address, req.UserId, req.Custody, req.Tags, null, ct);
++        await SendOkAsync(new CreateWalletResponse { WalletId = id }, ct);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs
+new file mode 100644
+index 0000000..7777777
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs
+@@ -0,0 +1,89 @@
++using FastEndpoints;
++using RichMove.SmartPay.Infrastructure.Blockchain;
++using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
++
++public sealed class CreateOnchainIntentRequest
++{
++    public Guid SourceAssetId { get; init; }
++    public Guid TargetAssetId { get; init; }
++    public decimal AmountSource { get; init; }
++    public string? QuoteId { get; init; }
++    public Guid? UserId { get; init; }
++    public string? IdempotencyKey { get; init; }
++}
++
++public sealed class CreateOnchainIntentResponse
++{
++    public Guid IntentId { get; init; }
++    public string Status { get; init; } = "CREATED";
++}
++
++public sealed class CreateOnchainIntentEndpoint : Endpoint<CreateOnchainIntentRequest, CreateOnchainIntentResponse>
++{
++    private readonly IBlockchainGate _gate;
++    private readonly IntentRepository _repo;
++
++    public CreateOnchainIntentEndpoint(IBlockchainGate gate, IntentRepository repo)
++    {
++        _gate = gate;
++        _repo = repo;
++    }
++
++    public override void Configure()
++    {
++        Post("/v1/chain/intents/onchain");
++        AllowAnonymous();
++        Summary(s => {
++            s.Summary = "Create on-chain payment intent";
++            s.Description = "Creates a chain-agnostic payment intent (route='ONCHAIN')";
++            s.Tags = new[] { "blockchain" };
++        });
++    }
++
++    public override async Task HandleAsync(CreateOnchainIntentRequest req, CancellationToken ct)
++    {
++        if (!_gate.Enabled)
++        {
++            await SendAsync(new CreateOnchainIntentResponse(), 501, ct);
++            return;
++        }
++
++        if (req.AmountSource <= 0)
++        {
++            AddError(r => r.AmountSource, "AmountSource must be > 0");
++            await SendErrorsAsync(cancellation: ct);
++            return;
++        }
++
++        var id = await _repo.CreateAsync(req.SourceAssetId, req.TargetAssetId, req.AmountSource, req.QuoteId, req.UserId, "ONCHAIN", "CREATED", req.IdempotencyKey, ct);
++        await SendOkAsync(new CreateOnchainIntentResponse { IntentId = id }, ct);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs
+new file mode 100644
+index 0000000..8888888
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs
+@@ -0,0 +1,129 @@
++using FastEndpoints;
++using RichMove.SmartPay.Infrastructure.Blockchain;
++using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
++
++public sealed class IngestTxRequest
++{
++    public Guid ChainId { get; init; }
++    public string TxHash { get; init; } = string.Empty;
++    public Guid? FromWalletId { get; init; }
++    public Guid? ToWalletId { get; init; }
++    public Guid? AssetId { get; init; }
++    public decimal? Amount { get; init; }
++    public Guid? FeeAssetId { get; init; }
++    public decimal? FeeAmount { get; init; }
++    public long? BlockNumber { get; init; }
++
++    // Optional: immediately link to an intent by creating a settlement+legs.
++    public Guid? IntentId { get; init; }
++    public Guid? CreditWalletId { get; init; } // for leg
++}
++
++public sealed class IngestTxResponse
++{
++    public Guid TxId { get; init; }
++    public Guid? SettlementId { get; init; }
++}
++
++public sealed class IngestTxEndpoint : Endpoint<IngestTxRequest, IngestTxResponse>
++{
++    private readonly IBlockchainGate _gate;
++    private readonly TxRepository _repo;
++
++    public IngestTxEndpoint(IBlockchainGate gate, TxRepository repo)
++    {
++        _gate = gate;
++        _repo = repo;
++    }
++
++    public override void Configure()
++    {
++        Post("/v1/chain/tx/ingest");
++        AllowAnonymous();
++        Summary(s => {
++            s.Summary = "Ingest on-chain transaction";
++            s.Description = "Stores on-chain tx and optionally creates a settlement+legs for a payment intent";
++            s.Tags = new[] { "blockchain" };
++        });
++    }
++
++    public override async Task HandleAsync(IngestTxRequest req, CancellationToken ct)
++    {
++        if (!_gate.Enabled)
++        {
++            await SendAsync(new IngestTxResponse(), 501, ct);
++            return;
++        }
++
++        if (string.IsNullOrWhiteSpace(req.TxHash))
++        {
++            AddError(r => r.TxHash, "TxHash is required");
++            await SendErrorsAsync(cancellation: ct);
++            return;
++        }
++
++        var txId = await _repo.IngestTxAsync(req.ChainId, req.TxHash, req.FromWalletId, req.ToWalletId,
++            req.AssetId, req.Amount, req.FeeAssetId, req.FeeAmount, req.BlockNumber, "PENDING", null, ct);
++
++        Guid? settlementId = null;
++        if (req.IntentId.HasValue && req.AssetId.HasValue && req.Amount.HasValue)
++        {
++            settlementId = await _repo.CreateSettlementAsync(req.IntentId.Value, ct);
++            // Credit leg to recipient
++            await _repo.CreateLegAsync(settlementId.Value, "CREDIT", req.AssetId.Value, req.Amount.Value,
++                req.CreditWalletId, txId, null, ct);
++            // Optional fee leg
++            if (req.FeeAssetId.HasValue && req.FeeAmount.HasValue && req.FeeAmount.Value > 0)
++            {
++                await _repo.CreateLegAsync(settlementId.Value, "FEE", req.FeeAssetId.Value, req.FeeAmount.Value,
++                    null, txId, null, ct);
++            }
++        }
++
++        await SendOkAsync(new IngestTxResponse { TxId = txId, SettlementId = settlementId }, ct);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Program.cs b/ZEN/SOURCE/Api/Program.cs
+index 0c0c0c0..0d0d0d1 100644
+--- a/ZEN/SOURCE/Api/Program.cs
++++ b/ZEN/SOURCE/Api/Program.cs
+@@ -1,6 +1,7 @@
+ using Microsoft.AspNetCore.Builder;
+ using Microsoft.Extensions.DependencyInjection;
+ using Microsoft.Extensions.Hosting;
++using RichMove.SmartPay.Infrastructure.Blockchain;
+ using RichMove.SmartPay.Infrastructure.ForeignExchange;
+ using RichMove.SmartPay.Core.ForeignExchange;
+ using FastEndpoints;
+@@ -24,6 +25,7 @@ builder.Services.AddControllers();
+ builder.Services.Configure<FxPricingOptions>(builder.Configuration.GetSection("FX:Pricing"));
+ 
+ // === WP2: Supabase integration ===
+ builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
++var bcEnabled = string.Equals(builder.Configuration["Blockchain:Enabled"], "true", StringComparison.OrdinalIgnoreCase);
+ 
+ // Conditional DI based on Supabase.Enabled
+ var supaSection = builder.Configuration.GetSection("Supabase");
+ var supaEnabled = supaSection.GetValue<bool>("Enabled");
+@@ -52,6 +54,15 @@ else
+ // Combined pricing picks Supabase if present, else appsettings
+ builder.Services.AddSingleton<IFxPricingProvider, CombinedFxPricingProvider>();
+ 
++// === Blockchain (isolated) ===
++builder.Services.AddSingleton<IBlockchainGate, BlockchainGate>();
++if (supaEnabled && bcEnabled)
++{
++    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.WalletRepository>();
++    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.IntentRepository>();
++    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.TxRepository>();
++}
++
+ // Core quote calculator/provider remains the same
+ builder.Services.AddSingleton<IFxQuoteProvider, SimpleFxQuoteProvider>();
+ 
+diff --git a/DOCS/API_Spec_Skeleton.yaml b/DOCS/API_Spec_Skeleton.yaml
+index bbbbbb1..cccccc2 100644
+--- a/DOCS/API_Spec_Skeleton.yaml
++++ b/DOCS/API_Spec_Skeleton.yaml
+@@ -200,6 +200,47 @@ paths:
+           description: Returns whether DB connectivity is available (non-fatal when disabled)
+ 
++  /v1/chain/wallets:
++    post:
++      summary: Create wallet record (feature-flagged)
++      tags: [blockchain]
++      responses:
++        '200':
++          description: Wallet created (or already present)
++        '501':
++          description: Feature disabled
++
++  /v1/chain/intents/onchain:
++    post:
++      summary: Create on-chain payment intent (feature-flagged)
++      tags: [blockchain]
++      responses:
++        '200':
++          description: Intent created
++        '400':
++          description: Validation error
++        '501':
++          description: Feature disabled
++
++  /v1/chain/tx/ingest:
++    post:
++      summary: Ingest an on-chain transaction and optionally settle an intent (feature-flagged)
++      tags: [blockchain]
++      responses:
++        '200':
++          description: Transaction stored (+ optional settlement)
++        '400':
++          description: Validation error
++        '501':
++          description: Feature disabled
++

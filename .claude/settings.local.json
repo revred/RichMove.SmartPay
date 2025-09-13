@@ -31,7 +31,9 @@
       "Bash(where 7z)",
       "Bash(xargs cat:*)",
       "Bash(bash:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Bash(tree:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

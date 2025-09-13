@@ -1,0 +1,566 @@
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IWalletRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IWalletRepository.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IWalletRepository.cs
+@@ -0,0 +1,13 @@
++using Npgsql;
++
++namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++public interface IWalletRepository
++{
++    Task<Guid> CreateAsync(Guid chainId, string address, Guid? userId, string custody = "EXTERNAL",
++        string[]? tags = null, IDictionary<string, object>? metadata = null, CancellationToken ct = default);
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IIntentRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IIntentRepository.cs
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IIntentRepository.cs
+@@ -0,0 +1,10 @@
++namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++public interface IIntentRepository
++{
++    Task<Guid> CreateAsync(Guid sourceAssetId, Guid targetAssetId, decimal amountSource,
++        string? quoteId, Guid? createdBy, string route = "ONCHAIN", string status = "CREATED",
++        string? idempotencyKey = null, CancellationToken ct = default);
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/ITxRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/ITxRepository.cs
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/ITxRepository.cs
+@@ -0,0 +1,19 @@
++namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++public interface ITxRepository
++{
++    Task<Guid> IngestTxAsync(Guid chainId, string txHash, Guid? fromWalletId, Guid? toWalletId,
++        Guid? assetId, decimal? amount, Guid? feeAssetId, decimal? feeAmount, long? blockNumber,
++        string status = "PENDING", IDictionary<string, object>? metadata = null, CancellationToken ct = default);
++
++    Task<Guid> CreateSettlementAsync(Guid intentId, CancellationToken ct = default);
++
++    Task<Guid> CreateLegAsync(Guid settlementId, string legType, Guid assetId, decimal amount,
++        Guid? walletId, Guid? onchainTxId, IDictionary<string, object>? metadata = null, CancellationToken ct = default);
++}
++
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/WalletRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/WalletRepository.cs
+index 3333333..4444444 100644
+--- a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/WalletRepository.cs
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/WalletRepository.cs
+@@ -1,10 +1,10 @@
+ using Npgsql;
+ 
+ namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
+ 
+-public sealed class WalletRepository
++public sealed class WalletRepository : IWalletRepository
+ {
+     private readonly NpgsqlDataSource _db;
+ 
+     public WalletRepository(NpgsqlDataSource db) => _db = db;
+ 
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IntentRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IntentRepository.cs
+index 4444444..5555555 100644
+--- a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IntentRepository.cs
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/IntentRepository.cs
+@@ -1,10 +1,10 @@
+ using Npgsql;
+ 
+ namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
+ 
+-public sealed class IntentRepository
++public sealed class IntentRepository : IIntentRepository
+ {
+     private readonly NpgsqlDataSource _db;
+ 
+     public IntentRepository(NpgsqlDataSource db) => _db = db;
+ 
+diff --git a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/TxRepository.cs b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/TxRepository.cs
+index 5555555..6666666 100644
+--- a/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/TxRepository.cs
++++ b/ZEN/SOURCE/Infrastructure/Blockchain/Repositories/TxRepository.cs
+@@ -1,10 +1,10 @@
+ using Npgsql;
+ 
+ namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
+ 
+-public sealed class TxRepository
++public sealed class TxRepository : ITxRepository
+ {
+     private readonly NpgsqlDataSource _db;
+ 
+     public TxRepository(NpgsqlDataSource db) => _db = db;
+ 
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs
+index 6666666..7777777 100644
+--- a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateWalletEndpoint.cs
+@@ -1,8 +1,8 @@
+ using FastEndpoints;
+ using RichMove.SmartPay.Infrastructure.Blockchain;
+-using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
+ 
+ namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
+ 
+ public sealed class CreateWalletRequest
+ {
+@@ -18,12 +18,12 @@ public sealed class CreateWalletResponse
+ }
+ 
+ public sealed class CreateWalletEndpoint : Endpoint<CreateWalletRequest, CreateWalletResponse>
+ {
+     private readonly IBlockchainGate _gate;
+-    private readonly WalletRepository _repo;
++    private readonly IWalletRepository _repo;
+ 
+-    public CreateWalletEndpoint(IBlockchainGate gate, WalletRepository repo)
++    public CreateWalletEndpoint(IBlockchainGate gate, IWalletRepository repo)
+     {
+         _gate = gate;
+         _repo = repo;
+     }
+ 
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs
+index 7777777..8888888 100644
+--- a/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/CreateOnchainIntentEndpoint.cs
+@@ -1,8 +1,8 @@
+ using FastEndpoints;
+ using RichMove.SmartPay.Infrastructure.Blockchain;
+-using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
+ 
+ namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
+ 
+ public sealed class CreateOnchainIntentRequest
+ {
+@@ -23,12 +23,12 @@ public sealed class CreateOnchainIntentResponse
+ }
+ 
+ public sealed class CreateOnchainIntentEndpoint : Endpoint<CreateOnchainIntentRequest, CreateOnchainIntentResponse>
+ {
+     private readonly IBlockchainGate _gate;
+-    private readonly IntentRepository _repo;
++    private readonly IIntentRepository _repo;
+ 
+-    public CreateOnchainIntentEndpoint(IBlockchainGate gate, IntentRepository repo)
++    public CreateOnchainIntentEndpoint(IBlockchainGate gate, IIntentRepository repo)
+     {
+         _gate = gate;
+         _repo = repo;
+     }
+ 
+diff --git a/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs
+index 8888888..9999999 100644
+--- a/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs
++++ b/ZEN/SOURCE/Api/Endpoints/Blockchain/IngestTxEndpoint.cs
+@@ -1,8 +1,8 @@
+ using FastEndpoints;
+ using RichMove.SmartPay.Infrastructure.Blockchain;
+-using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
+ 
+ namespace RichMove.SmartPay.Api.Endpoints.Blockchain;
+ 
+ public sealed class IngestTxRequest
+ {
+@@ -29,12 +29,12 @@ public sealed class IngestTxResponse
+ }
+ 
+ public sealed class IngestTxEndpoint : Endpoint<IngestTxRequest, IngestTxResponse>
+ {
+     private readonly IBlockchainGate _gate;
+-    private readonly TxRepository _repo;
++    private readonly ITxRepository _repo;
+ 
+-    public IngestTxEndpoint(IBlockchainGate gate, TxRepository repo)
++    public IngestTxEndpoint(IBlockchainGate gate, ITxRepository repo)
+     {
+         _gate = gate;
+         _repo = repo;
+     }
+ 
+diff --git a/ZEN/SOURCE/Api/Program.cs b/ZEN/SOURCE/Api/Program.cs
+index 0d0d0d1..0e0e0e2 100644
+--- a/ZEN/SOURCE/Api/Program.cs
++++ b/ZEN/SOURCE/Api/Program.cs
+@@ -56,10 +56,12 @@ builder.Services.AddSingleton<IFxPricingProvider, CombinedFxPricingProvider>();
+ // === Blockchain (isolated) ===
+ builder.Services.AddSingleton<IBlockchainGate, BlockchainGate>();
+ if (supaEnabled && bcEnabled)
+ {
+-    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.WalletRepository>();
+-    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.IntentRepository>();
+-    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.TxRepository>();
++    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.IWalletRepository, RichMove.SmartPay.Infrastructure.Blockchain.Repositories.WalletRepository>();
++    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.IIntentRepository, RichMove.SmartPay.Infrastructure.Blockchain.Repositories.IntentRepository>();
++    builder.Services.AddSingleton<RichMove.SmartPay.Infrastructure.Blockchain.Repositories.ITxRepository, RichMove.SmartPay.Infrastructure.Blockchain.Repositories.TxRepository>();
+ }
+ 
+ // Core quote calculator/provider remains the same
+ builder.Services.AddSingleton<IFxQuoteProvider, SimpleFxQuoteProvider>();
+ 
+diff --git a/ZEN/TESTS/Api.Tests/Api.Tests.csproj b/ZEN/TESTS/Api.Tests/Api.Tests.csproj
+index 1234567..2345678 100644
+--- a/ZEN/TESTS/Api.Tests/Api.Tests.csproj
++++ b/ZEN/TESTS/Api.Tests/Api.Tests.csproj
+@@ -6,6 +6,12 @@
+   </PropertyGroup>
+ 
+   <ItemGroup>
++    <PackageReference Include="NJsonSchema" Version="13.*" />
+   </ItemGroup>
++
++  <ItemGroup>
++    <None Include="Schemas\**\*.schema.json" CopyToOutputDirectory="Always" />
++  </ItemGroup>
+ 
+   <ItemGroup>
+     <ProjectReference Include="..\..\SOURCE\Api\Api.csproj" />
+diff --git b/ZEN/TESTS/Api.Tests/Helpers/JsonSchemaAssert.cs a/ZEN/TESTS/Api.Tests/Helpers/JsonSchemaAssert.cs
+new file mode 100644
+index 0000000..aaaaaaa
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/Helpers/JsonSchemaAssert.cs
+@@ -0,0 +1,56 @@
++using System.Text.Json;
++using NJsonSchema;
++using Xunit;
++
++namespace RichMove.SmartPay.Api.Tests.Helpers;
++
++public static class JsonSchemaAssert
++{
++    public static async Task ValidatesAgainstAsync(string schemaPath, string json)
++    {
++        var schema = await JsonSchema.FromJsonAsync(await File.ReadAllTextAsync(schemaPath));
++        var errors = schema.Validate(json);
++        if (errors.Any())
++        {
++            var detail = string.Join(Environment.NewLine, errors.Select(e => $"- {e.Path}: {e.Kind}"));
++            Assert.False(true, $"Schema validation failed for {Path.GetFileName(schemaPath)}:{Environment.NewLine}{detail}{Environment.NewLine}JSON:{Environment.NewLine}{json}");
++        }
++    }
++
++    public static async Task ValidatesAgainstAsync(string schemaPath, object obj)
++        => await ValidatesAgainstAsync(schemaPath, JsonSerializer.Serialize(obj));
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/Schemas/health_env.schema.json b/ZEN/TESTS/Api.Tests/Schemas/health_env.schema.json
+new file mode 100644
+index 0000000..bbbbbbb
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/Schemas/health_env.schema.json
+@@ -0,0 +1,35 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["environment", "supabaseEnabled", "supabaseDbConfigured", "rateSource", "pricingProvider", "quoteRepository"],
++  "properties": {
++    "environment": { "type": "string", "minLength": 1 },
++    "supabaseEnabled": { "type": "boolean" },
++    "supabaseDbConfigured": { "type": "boolean" },
++    "rateSource": { "type": "string" },
++    "pricingProvider": { "type": "string" },
++    "quoteRepository": { "type": "string" }
++  }
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/Schemas/health_db.schema.json b/ZEN/TESTS/Api.Tests/Schemas/health_db.schema.json
+new file mode 100644
+index 0000000..ccccccc
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/Schemas/health_db.schema.json
+@@ -0,0 +1,33 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["supabaseEnabled", "connected", "durationMs", "error"],
++  "properties": {
++    "supabaseEnabled": { "type": "boolean" },
++    "connected": { "type": "boolean" },
++    "durationMs": { "type": "integer", "minimum": 0 },
++    "error": { "type": ["string", "null"] }
++  }
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/Schemas/chain_wallet_create.schema.json b/ZEN/TESTS/Api.Tests/Schemas/chain_wallet_create.schema.json
+new file mode 100644
+index 0000000..ddddddd
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/Schemas/chain_wallet_create.schema.json
+@@ -0,0 +1,18 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["walletId"],
++  "properties": {
++    "walletId": { "type": "string", "format": "uuid" }
++  }
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/Schemas/chain_intent_create.schema.json b/ZEN/TESTS/Api.Tests/Schemas/chain_intent_create.schema.json
+new file mode 100644
+index 0000000..eeeeeee
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/Schemas/chain_intent_create.schema.json
+@@ -0,0 +1,23 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["intentId", "status"],
++  "properties": {
++    "intentId": { "type": "string", "format": "uuid" },
++    "status": { "type": "string", "minLength": 1 }
++  }
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/Schemas/chain_tx_ingest.schema.json b/ZEN/TESTS/Api.Tests/Schemas/chain_tx_ingest.schema.json
+new file mode 100644
+index 0000000..ffffff0
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/Schemas/chain_tx_ingest.schema.json
+@@ -0,0 +1,26 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "type": "object",
++  "additionalProperties": false,
++  "required": ["txId"],
++  "properties": {
++    "txId": { "type": "string", "format": "uuid" },
++    "settlementId": { "type": ["string", "null"], "format": "uuid" }
++  }
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/Helpers/StubDataSource.cs b/ZEN/TESTS/Api.Tests/Helpers/StubDataSource.cs
+new file mode 100644
+index 0000000..aaaaaab
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/Helpers/StubDataSource.cs
+@@ -0,0 +1,32 @@
++using Npgsql;
++
++namespace RichMove.SmartPay.Api.Tests.Helpers;
++
++/// <summary>
++/// Minimal stub to satisfy DI when repositories are faked.
++/// If accidentally used, it will throw to highlight unintended DB access in tests.
++/// </summary>
++public sealed class StubDataSource : NpgsqlDataSource
++{
++    public StubDataSource() : base(new NpgsqlDataSourceBuilder("Host=stub;Username=stub;Password=stub;Database=stub").Build("Host=stub;Username=stub;Password=stub;Database=stub")) { }
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/Helpers/Fakes.cs b/ZEN/TESTS/Api.Tests/Helpers/Fakes.cs
+new file mode 100644
+index 0000000..aaaaaac
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/Helpers/Fakes.cs
+@@ -0,0 +1,64 @@
++using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++
++namespace RichMove.SmartPay.Api.Tests.Helpers;
++
++public sealed class FakeWalletRepository : IWalletRepository
++{
++    public Task<Guid> CreateAsync(Guid chainId, string address, Guid? userId, string custody = "EXTERNAL", string[]? tags = null, IDictionary<string, object>? metadata = null, CancellationToken ct = default)
++        => Task.FromResult(Guid.NewGuid());
++}
++
++public sealed class FakeIntentRepository : IIntentRepository
++{
++    public Task<Guid> CreateAsync(Guid sourceAssetId, Guid targetAssetId, decimal amountSource, string? quoteId, Guid? createdBy, string route = "ONCHAIN", string status = "CREATED", string? idempotencyKey = null, CancellationToken ct = default)
++        => Task.FromResult(Guid.NewGuid());
++}
++
++public sealed class FakeTxRepository : ITxRepository
++{
++    public Task<Guid> IngestTxAsync(Guid chainId, string txHash, Guid? fromWalletId, Guid? toWalletId, Guid? assetId, decimal? amount, Guid? feeAssetId, decimal? feeAmount, long? blockNumber, string status = "PENDING", IDictionary<string, object>? metadata = null, CancellationToken ct = default)
++        => Task.FromResult(Guid.NewGuid());
++
++    public Task<Guid> CreateSettlementAsync(Guid intentId, CancellationToken ct = default)
++        => Task.FromResult(Guid.NewGuid());
++
++    public Task<Guid> CreateLegAsync(Guid settlementId, string legType, Guid assetId, decimal amount, Guid? walletId, Guid? onchainTxId, IDictionary<string, object>? metadata = null, CancellationToken ct = default)
++        => Task.FromResult(Guid.NewGuid());
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/HealthEndpointsSchemaTests.cs b/ZEN/TESTS/Api.Tests/HealthEndpointsSchemaTests.cs
+new file mode 100644
+index 0000000..bbbbbbc
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/HealthEndpointsSchemaTests.cs
+@@ -0,0 +1,75 @@
++using System.Net.Http.Json;
++using Microsoft.AspNetCore.Mvc.Testing;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.DependencyInjection;
++using RichMove.SmartPay.Api.Tests.Helpers;
++using Xunit;
++
++namespace RichMove.SmartPay.Api.Tests;
++
++public sealed class HealthEndpointsSchemaTests : IClassFixture<WebApplicationFactory<Program>>
++{
++    private readonly WebApplicationFactory<Program> _baseFactory;
++
++    public HealthEndpointsSchemaTests(WebApplicationFactory<Program> baseFactory)
++        => _baseFactory = baseFactory;
++
++    private WebApplicationFactory<Program> Factory(bool supabaseEnabled)
++        => _baseFactory.WithWebHostBuilder(b =>
++        {
++            b.UseEnvironment("Development");
++            b.ConfigureAppConfiguration((ctx, cfg) =>
++            {
++                var mem = new Dictionary<string, string?>
++                {
++                    ["Supabase:Enabled"] = supabaseEnabled ? "true" : "false",
++                    ["Environment:Name"] = "red"
++                };
++                cfg.AddInMemoryCollection(mem!);
++            });
++        });
++
++    [Fact]
++    public async Task HealthEnv_Response_Matches_Schema()
++    {
++        var client = Factory(supabaseEnabled: false).CreateClient();
++        var json = await client.GetStringAsync("/v1/health/env");
++        await Helpers.JsonSchemaAssert.ValidatesAgainstAsync("Schemas/health_env.schema.json", json);
++    }
++
++    [Fact]
++    public async Task HealthDb_Response_Matches_Schema_When_Supabase_Disabled()
++    {
++        var client = Factory(supabaseEnabled: false).CreateClient();
++        var json = await client.GetStringAsync("/v1/health/db");
++        await Helpers.JsonSchemaAssert.ValidatesAgainstAsync("Schemas/health_db.schema.json", json);
++    }
++}
++
+diff --git a/ZEN/TESTS/Api.Tests/BlockchainEndpointsTests.cs b/ZEN/TESTS/Api.Tests/BlockchainEndpointsTests.cs
+new file mode 100644
+index 0000000..ccccccd
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/BlockchainEndpointsTests.cs
+@@ -0,0 +1,156 @@
++using System.Net;
++using System.Net.Http.Json;
++using Microsoft.AspNetCore.Mvc.Testing;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Hosting;
++using RichMove.SmartPay.Api.Tests.Helpers;
++using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
++using Xunit;
++
++namespace RichMove.SmartPay.Api.Tests;
++
++public sealed class BlockchainEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
++{
++    private readonly WebApplicationFactory<Program> _baseFactory;
++
++    public BlockchainEndpointsTests(WebApplicationFactory<Program> baseFactory) => _baseFactory = baseFactory;
++
++    private WebApplicationFactory<Program> Factory(bool supabaseEnabled, bool blockchainEnabled, bool useFakes)
++        => _baseFactory.WithWebHostBuilder(b =>
++        {
++            b.UseEnvironment("Development");
++            b.ConfigureAppConfiguration((ctx, cfg) =>
++            {
++                var mem = new Dictionary<string, string?>
++                {
++                    ["Supabase:Enabled"] = supabaseEnabled ? "true" : "false",
++                    ["Blockchain:Enabled"] = blockchainEnabled ? "true" : "false"
++                };
++                cfg.AddInMemoryCollection(mem!);
++            });
++
++            if (useFakes)
++            {
++                b.ConfigureTestServices(svc =>
++                {
++                    // Replace repos with fakes to avoid DB usage
++                    svc.AddSingleton<IWalletRepository, FakeWalletRepository>();
++                    svc.AddSingleton<IIntentRepository, FakeIntentRepository>();
++                    svc.AddSingleton<ITxRepository, FakeTxRepository>();
++                });
++            }
++        });
++
++    [Fact]
++    public async Task Endpoints_Return_501_When_Disabled()
++    {
++        var client = Factory(supabaseEnabled: true, blockchainEnabled: false, useFakes: false).CreateClient();
++
++        var resp1 = await client.PostAsJsonAsync("/v1/chain/wallets", new { chainId = Guid.NewGuid(), address = "0xabc" });
++        var resp2 = await client.PostAsJsonAsync("/v1/chain/intents/onchain", new { sourceAssetId = Guid.NewGuid(), targetAssetId = Guid.NewGuid(), amountSource = 1.23m });
++        var resp3 = await client.PostAsJsonAsync("/v1/chain/tx/ingest", new { chainId = Guid.NewGuid(), txHash = "0xdeadbeef" });
++
++        Assert.Equal(HttpStatusCode.NotImplemented, resp1.StatusCode);
++        Assert.Equal(HttpStatusCode.NotImplemented, resp2.StatusCode);
++        Assert.Equal(HttpStatusCode.NotImplemented, resp3.StatusCode);
++    }
++
++    [Fact]
++    public async Task CreateWallet_Response_Matches_Schema_When_Enabled_With_Fakes()
++    {
++        var client = Factory(supabaseEnabled: true, blockchainEnabled: true, useFakes: true).CreateClient();
++        var payload = new { chainId = Guid.NewGuid(), address = "0xabc", custody = "EXTERNAL" };
++        var resp = await client.PostAsJsonAsync("/v1/chain/wallets", payload);
++        resp.EnsureSuccessStatusCode();
++        var json = await resp.Content.ReadAsStringAsync();
++        await Helpers.JsonSchemaAssert.ValidatesAgainstAsync("Schemas/chain_wallet_create.schema.json", json);
++    }
++
++    [Fact]
++    public async Task CreateIntent_Response_Matches_Schema_When_Enabled_With_Fakes()
++    {
++        var client = Factory(supabaseEnabled: true, blockchainEnabled: true, useFakes: true).CreateClient();
++        var payload = new { sourceAssetId = Guid.NewGuid(), targetAssetId = Guid.NewGuid(), amountSource = 10.50m };
++        var resp = await client.PostAsJsonAsync("/v1/chain/intents/onchain", payload);
++        resp.EnsureSuccessStatusCode();
++        var json = await resp.Content.ReadAsStringAsync();
++        await Helpers.JsonSchemaAssert.ValidatesAgainstAsync("Schemas/chain_intent_create.schema.json", json);
++    }
++
++    [Fact]
++    public async Task IngestTx_Response_Matches_Schema_When_Enabled_With_Fakes()
++    {
++        var client = Factory(supabaseEnabled: true, blockchainEnabled: true, useFakes: true).CreateClient();
++        var payload = new { chainId = Guid.NewGuid(), txHash = "0xdeadbeefcafebabe", assetId = Guid.NewGuid(), amount = 1.0m };
++        var resp = await client.PostAsJsonAsync("/v1/chain/tx/ingest", payload);
++        resp.EnsureSuccessStatusCode();
++        var json = await resp.Content.ReadAsStringAsync();
++        await Helpers.JsonSchemaAssert.ValidatesAgainstAsync("Schemas/chain_tx_ingest.schema.json", json);
++    }
++
++    [Fact]
++    public async Task Validation_Fails_On_Bad_Request_Shapes()
++    {
++        var client = Factory(supabaseEnabled: true, blockchainEnabled: true, useFakes: true).CreateClient();
++        // Missing address
++        var badWallet = await client.PostAsJsonAsync("/v1/chain/wallets", new { chainId = Guid.NewGuid() });
++        Assert.Equal(HttpStatusCode.BadRequest, badWallet.StatusCode);
++
++        // Negative amount
++        var badIntent = await client.PostAsJsonAsync("/v1/chain/intents/onchain", new { sourceAssetId = Guid.NewGuid(), targetAssetId = Guid.NewGuid(), amountSource = -1 });
++        Assert.Equal(HttpStatusCode.BadRequest, badIntent.StatusCode);
++
++        // Missing tx hash
++        var badTx = await client.PostAsJsonAsync("/v1/chain/tx/ingest", new { chainId = Guid.NewGuid() });
++        Assert.Equal(HttpStatusCode.BadRequest, badTx.StatusCode);
++    }
++}
++
