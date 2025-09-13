@@ -12,6 +12,7 @@ public static class NpgsqlDataSourceFactory
 {
     public static NpgsqlDataSource Create(IOptions<SupabaseOptions> options)
     {
+        ArgumentNullException.ThrowIfNull(options);
         var cfg = options.Value;
 
         // Enabled flag: try property, else env var, default false

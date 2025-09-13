@@ -3,8 +3,11 @@ using RichMove.SmartPay.Core.Integrations;
 using RichMove.SmartPay.Infrastructure.Data;
 using RichMove.SmartPay.Infrastructure.ForeignExchange;
 using RichMove.SmartPay.Infrastructure.Integrations;
+using RichMove.SmartPay.Infrastructure.Supabase;
 using FastEndpoints;
 using FastEndpoints.Swagger;
+using Microsoft.Extensions.Options;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,8 +22,39 @@ builder.Services.AddOptions<ShopifyOptions>()
     .Bind(builder.Configuration.GetSection(ShopifyOptions.SectionName))
     .ValidateDataAnnotations();
 
+// FX Pricing configuration
+builder.Services.Configure<FxPricingOptions>(builder.Configuration.GetSection("FX:Pricing"));
+
+// === WP2: Conditional Supabase integration ===
+var supaSection = builder.Configuration.GetSection("Supabase");
+var supaEnabled = supaSection.GetValue<bool>("Enabled");
+
+if (supaEnabled)
+{
+    // Supabase-backed services
+    builder.Services.AddSingleton<NpgsqlDataSource>(sp =>
+        NpgsqlDataSourceFactory.Create(sp.GetRequiredService<IOptions<SupabaseOptions>>()));
+
+    builder.Services.AddSingleton<IFxRateSource, SupabaseFxRateSource>();
+    builder.Services.AddSingleton<SupabasePricingProvider>();
+    builder.Services.AddSingleton<IFxPricingProvider>(sp => sp.GetRequiredService<SupabasePricingProvider>());
+    builder.Services.AddSingleton<IFxQuoteRepository, SupabaseFxQuoteRepository>();
+
+    // Background pricing refresh service
+    builder.Services.AddHostedService<SupabasePricingRefreshService>();
+}
+else
+{
+    // Fallback implementations
+    builder.Services.AddSingleton<IFxRateSource, InMemoryFxRateSource>();
+    builder.Services.AddSingleton<IFxPricingProvider, ConfigFxPricingProvider>();
+    builder.Services.AddSingleton<IFxQuoteRepository, NoOpFxQuoteRepository>();
+}
+
+// Main FX quote provider (uses above dependencies)
+builder.Services.AddSingleton<IFxQuoteProvider, SimpleFxQuoteProvider>();
+
 // DI registrations per ChatGPT review
-builder.Services.AddSingleton<IFxQuoteProvider, NullFxQuoteProvider>();
 builder.Services.AddSingleton<IShopifyClient, NullShopifyClient>();
 
 builder.Services.AddEndpointsApiExplorer();

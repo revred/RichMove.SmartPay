@@ -12,8 +12,9 @@ public sealed class CombinedFxPricingProvider : IFxPricingProvider
 
     public CombinedFxPricingProvider(IOptions<FxPricingOptions> fallbackOptions, IEnumerable<IFxPricingProvider> providers)
     {
+        ArgumentNullException.ThrowIfNull(fallbackOptions);
         _fallback = fallbackOptions.Value;
-        _supabase = providers.FirstOrDefault(p => p is SupabasePricingProvider);
+        _supabase = providers?.FirstOrDefault(p => p is SupabasePricingProvider);
     }
 
     public int MarkupBps => _supabase?.MarkupBps ?? _fallback.MarkupBps;

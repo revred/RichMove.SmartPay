@@ -21,11 +21,11 @@ public sealed class SupabaseFxRateSource : IFxRateSource
     public async Task<decimal> GetMidRateAsync(FxCurrencyPair pair, CancellationToken ct)
     {
         // try direct
-        var r = await TryGet(pair.ToString(), ct);
+        var r = await TryGet(pair.ToString(), ct).ConfigureAwait(false);
         if (r is not null) return r.Value;
 
         // try inverse
-        r = await TryGet($"{pair.Quote}/{pair.Base}", ct);
+        r = await TryGet($"{pair.Quote}/{pair.Base}", ct).ConfigureAwait(false);
         if (r is not null)
             return Decimal.Round(1m / r.Value, 6, MidpointRounding.AwayFromZero);
 
@@ -36,7 +36,7 @@ public sealed class SupabaseFxRateSource : IFxRateSource
     {
         await using var cmd = _db.CreateCommand("select mid_rate from public.fx_rate_mid where pair=@p");
         cmd.Parameters.AddWithValue("p", key);
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result is null ? null : Convert.ToDecimal(result);
+        var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
+        return result is null ? null : Convert.ToDecimal(result, System.Globalization.CultureInfo.InvariantCulture);
     }
 }

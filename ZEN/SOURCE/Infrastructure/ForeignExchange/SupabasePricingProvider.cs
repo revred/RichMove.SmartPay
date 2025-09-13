@@ -18,8 +18,8 @@ public sealed class SupabasePricingProvider : IFxPricingProvider
     public async Task RefreshAsync(CancellationToken ct = default)
     {
         await using var cmd = _db.CreateCommand("select markup_bps, fixed_fee_minor_units from public.fx_pricing_options where id='default'");
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        if (await reader.ReadAsync(ct))
+        await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        if (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
             MarkupBps = reader.GetInt32(0);
             FixedFeeMinorUnits = reader.GetInt32(1);
