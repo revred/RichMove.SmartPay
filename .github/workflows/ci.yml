@@ -56,7 +56,7 @@ jobs:
           --logger "console;verbosity=detailed"
 
     - name: Generate coverage report
-      uses: danielpalme/ReportGenerator-GitHub-Action@5.3.8
+      uses: danielpalme/ReportGenerator-GitHub-Action@5.4.13
       with:
         reports: '**/TestResults/coverage.cobertura.xml'
         targetdir: 'CoverageReport'
