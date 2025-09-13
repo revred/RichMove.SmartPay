@@ -1,0 +1,290 @@
+diff --git a/DOCS/CURRENCIES/CurrencySupport.md b/DOCS/CURRENCIES/CurrencySupport.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/DOCS/CURRENCIES/CurrencySupport.md
+@@ -0,0 +1,121 @@
++# Currency Support — Core Roster & Enablement
++
++This document defines the currencies we treat as **first‑class** in the SmartPay MVP and how new ones are added with **minimal impact**.
++
++## Tier‑1 (first‑class) currencies
++We prioritize these for docs, examples, test coverage, and partner discussions:
++
++- **GBP** — Pound Sterling (United Kingdom)
++- **EUR** — Euro (Eurozone)
++- **USD** — US Dollar (United States)
++- **INR** — Indian Rupee (India)
++- **AUD** — Australian Dollar (Australia) ← **added as Tier‑1 in this patch**
++- **AED** — UAE Dirham (United Arab Emirates) — used in examples for the AUD↔AED corridor
++
++> Note: The UAE currency code is **AED**, not “UAE”. We use ISO‑4217 codes throughout.
++
++## Decoupled design stance
++- **Core & API** accept any ISO‑4217 3‑letter code (`^[A-Z]{3}$`). Adding a currency **does not require code changes**.
++- Supported/marketed currencies are declared in **docs & config**, not hardcoded. Validation beyond ISO format is performed at the **provider layer** and contracts.
++- Feature behavior (fees, rounding, corridors) is **config‑driven** and covered by **contract tests** + **examples**, not new classes.
++
++## Minimal enablement checklist (per new currency)
++1. Add to docs roster (this file) + update examples
++2. Add corridor examples (request/response) under `DOCS/API/examples`
++3. Add Postman request(s) for quick verification
++4. Add contract tests that validate example payloads (structure, ISO codes, required fields)
++5. (Optional) Add pricing/rounding goldens if fees differ
++6. (Optional) Add `SupportedCurrencies.sample.json` for environments that want explicit allowlists
++
++## Corridors & examples
++Typical Tier‑1 corridors we will demonstrate and test:
++
++- GBP→EUR, GBP→USD, GBP→INR
++- **AUD→AED** (new example), AUD→USD, AUD→EUR
++
++> These examples are indicative; the Null/Dev providers return synthetic data. Production FX providers will drive availability & quotes per corridor.
++
++## Config allowlist (optional)
++Some deployments may require a strict allowlist. This patch adds a sample at `DOCS/CONFIG/SupportedCurrencies.sample.json` (not wired by default).
++
++## FAQ
++**Q: Do we need to change Core for a new currency?**  
++A: No. Core uses ISO‑4217 strings; no hardcoded enums.
++
++**Q: Why include AED with AUD?**  
++A: The requested corridor mentioned “UAE”; the ISO currency is **AED**. We include examples to show the path for Middle‑East corridors.
++
+diff --git a/DOCS/CONFIG/SupportedCurrencies.sample.json b/DOCS/CONFIG/SupportedCurrencies.sample.json
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/DOCS/CONFIG/SupportedCurrencies.sample.json
+@@ -0,0 +1,16 @@
++{
++  "supportedCurrencies": [
++    "GBP",
++    "EUR",
++    "USD",
++    "INR",
++    "AUD",
++    "AED",
++    "CAD"
++  ]
++}
++
+diff --git a/DOCS/API/examples/FxQuoteRequest.AUD_AED.example.json b/DOCS/API/examples/FxQuoteRequest.AUD_AED.example.json
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/DOCS/API/examples/FxQuoteRequest.AUD_AED.example.json
+@@ -0,0 +1,9 @@
++{
++  "baseCurrency": "AUD",
++  "quoteCurrency": "AED",
++  "amount": 2500.00,
++  "clientId": "aud-corridor-demo",
++  "correlationId": "corr-2353-aud-aed"
++}
++
+diff --git a/DOCS/API/examples/FxQuoteResult.AUD_AED.example.json b/DOCS/API/examples/FxQuoteResult.AUD_AED.example.json
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/DOCS/API/examples/FxQuoteResult.AUD_AED.example.json
+@@ -0,0 +1,12 @@
++{
++  "rate": 2.4201,
++  "baseCurrency": "AUD",
++  "quoteCurrency": "AED",
++  "amount": 2500.0,
++  "fees": 1.2,
++  "expiresAtUtc": "2025-09-30T23:59:59Z",
++  "provider": "NullFxProvider"
++}
++
+diff --git a/DOCS/API/SmartPay.OpenAPI.AUD.addendum.yaml b/DOCS/API/SmartPay.OpenAPI.AUD.addendum.yaml
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/DOCS/API/SmartPay.OpenAPI.AUD.addendum.yaml
+@@ -0,0 +1,48 @@
++openapi: 3.0.3
++info:
++  title: RichMove SmartPay API — AUD Enablement Addendum
++  version: 1.0.0
++  description: |
++    This addendum documents AUD as a Tier‑1 currency and adds AUD↔AED examples.
++    Core contracts remain unchanged (3‑letter ISO codes).
++paths:
++  /api/v1/fx/quote:
++    post:
++      requestBody:
++        content:
++          application/json:
++            examples:
++              aud_to_aed:
++                summary: AUD→AED example
++                value:
++                  $ref: './examples/FxQuoteRequest.AUD_AED.example.json'
++      responses:
++        '200':
++          content:
++            application/json:
++              examples:
++                aud_to_aed:
++                  summary: AUD→AED result
++                  value:
++                    $ref: './examples/FxQuoteResult.AUD_AED.example.json'
++components: {}
++
+diff --git a/DEVX/Postman/SmartPay.AUD.postman_collection.json b/DEVX/Postman/SmartPay.AUD.postman_collection.json
+new file mode 100644
+index 0000000..6666666
+--- /dev/null
++++ b/DEVX/Postman/SmartPay.AUD.postman_collection.json
+@@ -0,0 +1,46 @@
++{
++  "info": {
++    "name": "RichMove SmartPay API — AUD",
++    "_postman_id": "e6b1aa4c-aaaa-bbbb-cccc-2353audcorridor",
++    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
++  },
++  "item": [
++    {
++      "name": "FX Quote AUD→AED",
++      "request": {
++        "method": "POST",
++        "header": [ { "key": "Content-Type", "value": "application/json" } ],
++        "url": "{{baseUrl}}/api/v1/fx/quote",
++        "body": {
++          "mode": "raw",
++          "raw": "{\n  \"baseCurrency\": \"AUD\",\n  \"quoteCurrency\": \"AED\",\n  \"amount\": 2500.0\n}"
++        }
++      }
++    }
++  ]
++}
++
+diff --git a/DOCS/ADR/ADR-0004-Currency-Configuration.md b/DOCS/ADR/ADR-0004-Currency-Configuration.md
+new file mode 100644
+index 0000000..7777777
+--- /dev/null
++++ b/DOCS/ADR/ADR-0004-Currency-Configuration.md
+@@ -0,0 +1,54 @@
++# ADR-0004 — Currency Configuration & Expansion
++
++## Status
++Accepted (WP3)
++
++## Context
++We need to support new ISO‑4217 currencies (e.g., **AUD**) without refactoring Core or coupling API behavior to specific currencies.
++
++## Decision
++- Use **ISO‑4217 strings** (`^[A-Z]{3}$`) across Core and API (no enums).
++- Keep **schemas** generic; use **examples** and **docs** to highlight Tier‑1 currencies.
++- Provide an optional **config allowlist** (`SupportedCurrencies.sample.json`) for deployments that need governance. This is **not** wired by default.
++- Cover new corridors via **examples**, **Postman**, and **contract tests** that validate example shape.
++
++## Consequences
++- Minimal code churn for currency additions.
++- Provider layer remains responsible for real availability, pricing, and rounding rules.
++- Contract tests guard against accidental schema drift.
++
+diff --git a/ZEN/TESTS/Core.Tests/Contracts/AudContractsTests.cs b/ZEN/TESTS/Core.Tests/Contracts/AudContractsTests.cs
+new file mode 100644
+index 0000000..8888888
+--- /dev/null
++++ b/ZEN/TESTS/Core.Tests/Contracts/AudContractsTests.cs
+@@ -0,0 +1,111 @@
++using System;
++using System.IO;
++using System.Text.Json;
++using System.Text.RegularExpressions;
++using Xunit;
++
++namespace RichMove.SmartPay.Core.Tests.Contracts;
++
++public class AudContractsTests
++{
++    private static readonly Regex Iso4217 = new("^[A-Z]{3}$");
++
++    private static string RepoRoot()
++    {
++        var dir = new DirectoryInfo(AppContext.BaseDirectory);
++        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "DOCS")))
++            dir = dir.Parent;
++        if (dir == null) throw new DirectoryNotFoundException("Could not locate repo root (missing DOCS folder).");
++        return dir.FullName;
++    }
++
++    [Fact]
++    public void FxQuoteRequest_AUD_AED_Example_IsValidShape()
++    {
++        var path = Path.Combine(RepoRoot(), "DOCS", "API", "examples", "FxQuoteRequest.AUD_AED.example.json");
++        Assert.True(File.Exists(path), $"Missing example file: {path}");
++
++        using var doc = JsonDocument.Parse(File.ReadAllText(path));
++        var root = doc.RootElement;
++
++        Assert.True(root.TryGetProperty("baseCurrency", out var baseCcy));
++        Assert.True(root.TryGetProperty("quoteCurrency", out var quoteCcy));
++        Assert.True(root.TryGetProperty("amount", out var amount));
++
++        Assert.Matches(Iso4217, baseCcy.GetString() ?? string.Empty);
++        Assert.Matches(Iso4217, quoteCcy.GetString() ?? string.Empty);
++        Assert.Equal("AUD", baseCcy.GetString());
++        Assert.Equal("AED", quoteCcy.GetString());
++        Assert.True(amount.GetDouble() > 0);
++    }
++
++    [Fact]
++    public void FxQuoteResult_AUD_AED_Example_IsValidShape()
++    {
++        var path = Path.Combine(RepoRoot(), "DOCS", "API", "examples", "FxQuoteResult.AUD_AED.example.json");
++        Assert.True(File.Exists(path), $"Missing example file: {path}");
++
++        using var doc = JsonDocument.Parse(File.ReadAllText(path));
++        var root = doc.RootElement;
++
++        string[] required = { "rate", "baseCurrency", "quoteCurrency", "amount", "expiresAtUtc" };
++        foreach (var key in required)
++            Assert.True(root.TryGetProperty(key, out _), $"Missing property {key}");
++
++        Assert.Equal("AUD", root.GetProperty("baseCurrency").GetString());
++        Assert.Equal("AED", root.GetProperty("quoteCurrency").GetString());
++        Assert.Matches(Iso4217, root.GetProperty("baseCurrency").GetString() ?? string.Empty);
++        Assert.Matches(Iso4217, root.GetProperty("quoteCurrency").GetString() ?? string.Empty);
++
++        var rate = root.GetProperty("rate").GetDouble();
++        var amount = root.GetProperty("amount").GetDouble();
++        Assert.True(rate >= 0);
++        Assert.True(amount >= 0);
++    }
++}
++
+diff --git a/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2353_AUD_Enablement.NOTES.md b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2353_AUD_Enablement.NOTES.md
+new file mode 100644
+index 0000000..9999999
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/PatchOn/20250913/2353_AUD_Enablement.NOTES.md
+@@ -0,0 +1,47 @@
++# Patch Notes — 2353 AUD Enablement (Docs‑First)
++
++**Intent:** Treat **AUD** as a first‑class currency with **minimal impact**. No Core/API code changed; only docs, examples, Postman, ADR, and tests are added.
++
++### Adds
++- Currency roster doc (`DOCS/CURRENCIES/CurrencySupport.md`) with **AUD** as Tier‑1 and **AED** as corridor peer.
++- Examples for **AUD→AED** request/result under `DOCS/API/examples/`.
++- OpenAPI **addendum** (`DOCS/API/SmartPay.OpenAPI.AUD.addendum.yaml`) adding AUD examples without editing the base OpenAPI.
++- Postman collection focused on the AUD corridor.
++- Optional allowlist sample `DOCS/CONFIG/SupportedCurrencies.sample.json` (not wired by default).
++- Contract tests (`AudContractsTests`) that validate the shape of AUD examples and ISO code constraints.
++- ADR on currency configuration & expansion.
++
++### Why no code changes?
++Our contracts already use ISO‑4217 strings; adding currencies is a **documentation + configuration** operation. Provider availability/pricing is addressed in provider integrations, not in Core contracts.
++
++### Next steps (optional, non‑breaking)
++- Wire an environment‑level allowlist if governance requires it.
++- Add rounding/fee goldens if AUD corridors have special rules.
++- Extend SDK examples to include AUD.
++
++— ChatGPT
++

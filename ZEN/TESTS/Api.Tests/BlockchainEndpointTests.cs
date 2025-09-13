@@ -15,6 +15,7 @@ public sealed class BlockchainEndpointTests : IClassFixture<TestWebApplicationFa
     public async Task CreateWallet_WhenBlockchainDisabled_Returns404()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var request = new { ChainId = Guid.NewGuid(), Address = "0x123", Custody = "EXTERNAL" };
 
         var response = await client.PostAsJsonAsync("/v1/chain/wallets", request);
@@ -28,6 +29,7 @@ public sealed class BlockchainEndpointTests : IClassFixture<TestWebApplicationFa
     public async Task CreateOnchainIntent_WhenBlockchainDisabled_Returns404()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var request = new { SourceAssetId = Guid.NewGuid(), TargetAssetId = Guid.NewGuid(), AmountSource = 100m };
 
         var response = await client.PostAsJsonAsync("/v1/chain/intents/onchain", request);
@@ -41,6 +43,7 @@ public sealed class BlockchainEndpointTests : IClassFixture<TestWebApplicationFa
     public async Task IngestTx_WhenBlockchainDisabled_Returns404()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var request = new { ChainId = Guid.NewGuid(), TxHash = "0xabc123" };
 
         var response = await client.PostAsJsonAsync("/v1/chain/tx/ingest", request);

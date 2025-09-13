@@ -6,7 +6,9 @@ using RichMove.SmartPay.Infrastructure.Blockchain;
 using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
 using FastEndpoints;
 using FastEndpoints.Swagger;
+using Microsoft.Extensions.Logging;
 using Npgsql;
+using RichMove.SmartPay.Api.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -54,8 +56,14 @@ else
 builder.Services.AddFastEndpoints();
 builder.Services.SwaggerDocument();
 
+// WP3: Platform Hardening (flags, correlation, idempotency, problem details)
+builder.Services.AddSmartPayPlatformHardening(builder.Configuration);
+
 var app = builder.Build();
 
+// WP3: wire middleware & feature-flagged ledger binding
+var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+app.UseSmartPayPlatformHardening(loggerFactory);
 
 // Enable FastEndpoints and Swagger
 app.UseFastEndpoints();

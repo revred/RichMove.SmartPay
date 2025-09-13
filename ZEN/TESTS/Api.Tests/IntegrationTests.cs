@@ -34,6 +34,7 @@ public class IntegrationTests : IClassFixture<TestWebApplicationFactory>
     public async Task FxQuote_ReturnsSentinelValues()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var request = new FxQuoteRequest
         {
             FromCurrency = "GBP",

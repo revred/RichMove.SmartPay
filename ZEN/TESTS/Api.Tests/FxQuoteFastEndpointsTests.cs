@@ -16,6 +16,7 @@ public sealed class FxQuoteFastEndpointsTests : IClassFixture<TestWebApplication
     public async Task Post_Quotes_Returns_200_With_Valid_Input()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var req = new { fromCurrency = "GBP", toCurrency = "USD", amount = 100m };
 
         var resp = await client.PostAsJsonAsync("/v1/fx/quotes", req);
@@ -30,6 +31,7 @@ public sealed class FxQuoteFastEndpointsTests : IClassFixture<TestWebApplication
     public async Task Post_Quotes_Returns_400_On_Bad_Input()
     {
         var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var bad = new { fromCurrency = "GB", toCurrency = "", amount = 0m };
 
         var resp = await client.PostAsJsonAsync("/v1/fx/quotes", bad);

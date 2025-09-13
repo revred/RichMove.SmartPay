@@ -45,8 +45,16 @@ public sealed class BlockchainEndpointsSchemaTests : IClassFixture<WebApplicatio
     {
         var client = Factory(supabaseEnabled: true, blockchainEnabled: false, useFakes: false).CreateClient();
 
+        client.DefaultRequestHeaders.Remove("Idempotency-Key");
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var resp1 = await client.PostAsJsonAsync("/v1/chain/wallets", new { chainId = Guid.NewGuid(), address = "0xabc" });
+
+        client.DefaultRequestHeaders.Remove("Idempotency-Key");
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var resp2 = await client.PostAsJsonAsync("/v1/chain/intents/onchain", new { sourceAssetId = Guid.NewGuid(), targetAssetId = Guid.NewGuid(), amountSource = 1.23m });
+
+        client.DefaultRequestHeaders.Remove("Idempotency-Key");
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var resp3 = await client.PostAsJsonAsync("/v1/chain/tx/ingest", new { chainId = Guid.NewGuid(), txHash = "0xdeadbeef" });
 
         Assert.Equal(HttpStatusCode.NotFound, resp1.StatusCode);
@@ -62,6 +70,7 @@ public sealed class BlockchainEndpointsSchemaTests : IClassFixture<WebApplicatio
     public async Task CreateWallet_Response_Matches_Schema_When_Enabled_With_Fakes()
     {
         var client = Factory(supabaseEnabled: true, blockchainEnabled: true, useFakes: true).CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var payload = new { chainId = Guid.NewGuid(), address = "0xabc", custody = "EXTERNAL" };
         var resp = await client.PostAsJsonAsync("/v1/chain/wallets", payload);
         resp.EnsureSuccessStatusCode();
@@ -73,6 +82,7 @@ public sealed class BlockchainEndpointsSchemaTests : IClassFixture<WebApplicatio
     public async Task CreateIntent_Response_Matches_Schema_When_Enabled_With_Fakes()
     {
         var client = Factory(supabaseEnabled: true, blockchainEnabled: true, useFakes: true).CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var payload = new { sourceAssetId = Guid.NewGuid(), targetAssetId = Guid.NewGuid(), amountSource = 10.50m };
         var resp = await client.PostAsJsonAsync("/v1/chain/intents/onchain", payload);
         resp.EnsureSuccessStatusCode();
@@ -84,6 +94,7 @@ public sealed class BlockchainEndpointsSchemaTests : IClassFixture<WebApplicatio
     public async Task IngestTx_Response_Matches_Schema_When_Enabled_With_Fakes()
     {
         var client = Factory(supabaseEnabled: true, blockchainEnabled: true, useFakes: true).CreateClient();
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var payload = new { chainId = Guid.NewGuid(), txHash = "0xdeadbeefcafebabe", assetId = Guid.NewGuid(), amount = 1.0m };
         var resp = await client.PostAsJsonAsync("/v1/chain/tx/ingest", payload);
         resp.EnsureSuccessStatusCode();
@@ -97,14 +108,20 @@ public sealed class BlockchainEndpointsSchemaTests : IClassFixture<WebApplicatio
         var client = Factory(supabaseEnabled: true, blockchainEnabled: true, useFakes: true).CreateClient();
 
         // Missing address
+        client.DefaultRequestHeaders.Remove("Idempotency-Key");
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var badWallet = await client.PostAsJsonAsync("/v1/chain/wallets", new { chainId = Guid.NewGuid() });
         Assert.Equal(HttpStatusCode.BadRequest, badWallet.StatusCode);
 
         // Negative amount
+        client.DefaultRequestHeaders.Remove("Idempotency-Key");
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var badIntent = await client.PostAsJsonAsync("/v1/chain/intents/onchain", new { sourceAssetId = Guid.NewGuid(), targetAssetId = Guid.NewGuid(), amountSource = -1 });
         Assert.Equal(HttpStatusCode.BadRequest, badIntent.StatusCode);
 
         // Missing tx hash
+        client.DefaultRequestHeaders.Remove("Idempotency-Key");
+        client.DefaultRequestHeaders.Add("Idempotency-Key", Guid.NewGuid().ToString());
         var badTx = await client.PostAsJsonAsync("/v1/chain/tx/ingest", new { chainId = Guid.NewGuid() });
         Assert.Equal(HttpStatusCode.BadRequest, badTx.StatusCode);
     }
