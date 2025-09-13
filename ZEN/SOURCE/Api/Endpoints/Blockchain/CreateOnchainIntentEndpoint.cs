@@ -1,4 +1,5 @@
 using FastEndpoints;
+using RichMove.SmartPay.Api.Endpoints.Blockchain.Base;
 using RichMove.SmartPay.Infrastructure.Blockchain;
 using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
 
@@ -20,14 +21,12 @@ public sealed class CreateOnchainIntentResponse
     public string Status { get; init; } = "CREATED";
 }
 
-public sealed class CreateOnchainIntentEndpoint : Endpoint<CreateOnchainIntentRequest, CreateOnchainIntentResponse>
+public sealed class CreateOnchainIntentEndpoint : BlockchainEndpoint<CreateOnchainIntentRequest, CreateOnchainIntentResponse>
 {
-    private readonly IBlockchainGate _gate;
-    private readonly IntentRepository _repo;
+    private readonly IIntentRepository _repo;
 
-    public CreateOnchainIntentEndpoint(IBlockchainGate gate, IntentRepository repo)
+    public CreateOnchainIntentEndpoint(IBlockchainGate gate, IIntentRepository repo) : base(gate)
     {
-        _gate = gate;
         _repo = repo;
     }
 
@@ -41,15 +40,9 @@ public sealed class CreateOnchainIntentEndpoint : Endpoint<CreateOnchainIntentRe
         });
     }
 
-    public override async Task HandleAsync(CreateOnchainIntentRequest req, CancellationToken ct)
+    protected override async Task HandleWhenEnabledAsync(CreateOnchainIntentRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-
-        if (!_gate.Enabled)
-        {
-            await SendAsync(new CreateOnchainIntentResponse(), 501, ct);
-            return;
-        }
 
         if (req.AmountSource <= 0)
         {

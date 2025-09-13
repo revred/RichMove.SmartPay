@@ -36,17 +36,17 @@ if (!string.IsNullOrEmpty(supabaseConnectionString) && blockchainEnabled)
         return dataSourceBuilder.Build();
     });
 
-    builder.Services.AddSingleton<WalletRepository>();
-    builder.Services.AddSingleton<IntentRepository>();
-    builder.Services.AddSingleton<TxRepository>();
+    builder.Services.AddSingleton<IWalletRepository, WalletRepository>();
+    builder.Services.AddSingleton<IIntentRepository, IntentRepository>();
+    builder.Services.AddSingleton<ITxRepository, TxRepository>();
 }
 else
 {
     // Register stub repositories when blockchain is disabled
     // These won't be called since endpoints check the gate first, but are needed for DI
-    builder.Services.AddSingleton<WalletRepository>(_ => new WalletRepository(null));
-    builder.Services.AddSingleton<IntentRepository>(_ => new IntentRepository(null));
-    builder.Services.AddSingleton<TxRepository>(_ => new TxRepository(null));
+    builder.Services.AddSingleton<IWalletRepository>(_ => new WalletRepository(null));
+    builder.Services.AddSingleton<IIntentRepository>(_ => new IntentRepository(null));
+    builder.Services.AddSingleton<ITxRepository>(_ => new TxRepository(null));
 }
 
 // FastEndpoints configuration - always register all endpoints

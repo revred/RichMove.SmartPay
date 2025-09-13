@@ -2,7 +2,7 @@ using Npgsql;
 
 namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
 
-public sealed class TxRepository
+public sealed class TxRepository : ITxRepository
 {
     private readonly NpgsqlDataSource _db;
 

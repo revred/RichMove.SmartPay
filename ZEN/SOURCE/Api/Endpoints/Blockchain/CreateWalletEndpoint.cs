@@ -1,4 +1,5 @@
 using FastEndpoints;
+using RichMove.SmartPay.Api.Endpoints.Blockchain.Base;
 using RichMove.SmartPay.Infrastructure.Blockchain;
 using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
 
@@ -21,14 +22,12 @@ public sealed class CreateWalletResponse
     public Guid WalletId { get; init; }
 }
 
-public sealed class CreateWalletEndpoint : Endpoint<CreateWalletRequest, CreateWalletResponse>
+public sealed class CreateWalletEndpoint : BlockchainEndpoint<CreateWalletRequest, CreateWalletResponse>
 {
-    private readonly IBlockchainGate _gate;
-    private readonly WalletRepository _repo;
+    private readonly IWalletRepository _repo;
 
-    public CreateWalletEndpoint(IBlockchainGate gate, WalletRepository repo)
+    public CreateWalletEndpoint(IBlockchainGate gate, IWalletRepository repo) : base(gate)
     {
-        _gate = gate;
         _repo = repo;
     }
 
@@ -42,15 +41,9 @@ public sealed class CreateWalletEndpoint : Endpoint<CreateWalletRequest, CreateW
         });
     }
 
-    public override async Task HandleAsync(CreateWalletRequest req, CancellationToken ct)
+    protected override async Task HandleWhenEnabledAsync(CreateWalletRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-
-        if (!_gate.Enabled)
-        {
-            await SendAsync(new CreateWalletResponse(), 501, ct);
-            return;
-        }
 
         if (string.IsNullOrWhiteSpace(req.Address))
         {

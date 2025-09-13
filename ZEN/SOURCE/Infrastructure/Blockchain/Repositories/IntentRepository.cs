@@ -2,7 +2,7 @@ using Npgsql;
 
 namespace RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
 
-public sealed class IntentRepository
+public sealed class IntentRepository : IIntentRepository
 {
     private readonly NpgsqlDataSource _db;
 

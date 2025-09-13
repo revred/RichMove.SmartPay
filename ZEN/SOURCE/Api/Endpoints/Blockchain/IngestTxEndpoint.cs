@@ -1,4 +1,5 @@
 using FastEndpoints;
+using RichMove.SmartPay.Api.Endpoints.Blockchain.Base;
 using RichMove.SmartPay.Infrastructure.Blockchain;
 using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
 
@@ -27,14 +28,12 @@ public sealed class IngestTxResponse
     public Guid? SettlementId { get; init; }
 }
 
-public sealed class IngestTxEndpoint : Endpoint<IngestTxRequest, IngestTxResponse>
+public sealed class IngestTxEndpoint : BlockchainEndpoint<IngestTxRequest, IngestTxResponse>
 {
-    private readonly IBlockchainGate _gate;
-    private readonly TxRepository _repo;
+    private readonly ITxRepository _repo;
 
-    public IngestTxEndpoint(IBlockchainGate gate, TxRepository repo)
+    public IngestTxEndpoint(IBlockchainGate gate, ITxRepository repo) : base(gate)
     {
-        _gate = gate;
         _repo = repo;
     }
 
@@ -48,15 +47,9 @@ public sealed class IngestTxEndpoint : Endpoint<IngestTxRequest, IngestTxRespons
         });
     }
 
-    public override async Task HandleAsync(IngestTxRequest req, CancellationToken ct)
+    protected override async Task HandleWhenEnabledAsync(IngestTxRequest req, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-
-        if (!_gate.Enabled)
-        {
-            await SendAsync(new IngestTxResponse(), 501, ct);
-            return;
-        }
 
         if (string.IsNullOrWhiteSpace(req.TxHash))
         {
