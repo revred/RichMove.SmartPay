@@ -1,0 +1,6 @@
+title = "RichMove gitleaks config"
+[[rules]]
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api|token|key)[=:]\s*['\"]?[a-z0-9-_]{16,}['\"]?'''
+tags = ["key", "API", "generic"]

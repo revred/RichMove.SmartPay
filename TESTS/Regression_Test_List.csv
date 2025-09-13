@@ -1,0 +1,8 @@
+Area,TestID,Description,Priority
+Checkout,CHK-01,Card happy path with refund,High
+Checkout,CHK-02,A2A init/abort/complete,High
+FX,FX-01,Quote expiry and rounding,High
+Payouts,PAY-01,Default PSP settlement,Med
+Payouts,PAY-02,SPI remittance simulated,High
+Webhooks,WH-01,Duplicate delivery idempotency,High
+Security,SEC-01,JWT tamper detection,High

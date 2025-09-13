@@ -1,0 +1,32 @@
+# Build
+bin/
+obj/
+**/bin/
+**/obj/
+*.user
+*.suo
+*.cache
+*.vs/
+.vscode/
+.idea/
+# Logs
+logs/
+*.log
+# Secrets & env
+.env
+.env.*
+.envrc
+*.age
+*.asc
+*.key
+supabase/.temp/
+# Coverage & test artifacts
+coverage/
+coverage-history/
+TestResults/
+# OS
+.DS_Store
+Thumbs.db
+# Packages
+node_modules/
+dist/

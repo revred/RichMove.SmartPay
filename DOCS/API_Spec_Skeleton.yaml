@@ -1,0 +1,17 @@
+openapi: 3.1.0
+info:
+  title: RichMove.SmartPay
+  version: 0.1.0
+paths:
+  /v1/quotes:
+    post:
+      summary: Create FX quote
+      responses: { '200': { description: OK } }
+  /v1/payments:
+    post:
+      summary: Create payment
+      responses: { '200': { description: OK } }
+  /v1/providers/{name}/webhook:
+    post:
+      summary: Provider webhook
+      responses: { '200': { description: OK } }

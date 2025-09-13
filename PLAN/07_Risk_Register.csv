@@ -1,0 +1,6 @@
+ID,Category,Risk,Impact,Probability,Owner,Mitigation,Trigger,Status
+R1,Regulatory,Scope creep into PIS/AIS,High,Med,Compliance,Keep partner-led A2A; verify scope each release,Feature PR includes reg check,Open
+R2,Banking,No safeguarding account if opted-in,Med,Low,CEO,Use partner platform settlement; keep opt-in optional,Bank declines,Open
+R3,Tech,Idempotency failure under load,High,Med,Lead Dev,k6 storm tests + dedup keys + outbox,Load test fail,Open
+R4,Partner,PSP sandbox instability,Med,Med,PM,Abstract provider via adapter; toggle to mock,Frequent sandbox outages,Open
+R5,Data,PII leakage via logs,High,Low,Sec Lead,PII scrubbing + log policy + review,Static scan flags,Open

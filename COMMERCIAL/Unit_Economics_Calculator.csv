@@ -1,0 +1,6 @@
+Metric,Value,Notes
+Avg Order Value,50,GBP
+Card Fee bps,170,Pass-through example
+A2A Fee,0.2,GBP flat
+FX Spread bps,45,Blended
+Monthly GMV,100000,GBP

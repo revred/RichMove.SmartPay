@@ -1,0 +1,15 @@
+ID,Parent,Task,Start,DurationDays,DependsOn,Milestone
+A1,,WP1 Repo & CI/CD,2025-09-15,7,,
+A2,,WP2 Domain & DB,,6,A1,
+A3,,WP3 API & Contracts,,6,A2,
+B1,,WP4 Orchestrator+Connectors,,10,A3,
+B2,,WP5 FX & Remittance (SPI),,10,A3,
+C1,,WP6 Checkout UI & SDKs,,7,B1,
+C2,,WP7 Merchant Dashboard,,7,B2,
+C3,,WP8 Analytics & Reporting,,5,C2,
+D1,,WP9 Security & Compliance,2025-09-15,10,,
+D2,,WP10 QA & Regression,,7,C3,
+D3,,WP11 Regulatory & Licensing,2025-09-15,30,,
+E1,,WP12 Partners & GTM,,20,B1,
+M1,,MVP Demo,,0,C1,Yes
+M2,,Beta Ready,,0,D2,Yes

@@ -1,0 +1,17 @@
+```mermaid
+flowchart LR
+  subgraph Merchant
+    A[Storefront/Checkout SDK]
+    D[Dashboard]
+  end
+  A -->|Orchestrate| B(API Gateway)
+  B --> C1[Stripe Cards]
+  B --> C2[TrueLayer A2A]
+  B --> C3[PayPal]
+  B --> F1[Shippo]
+  B --> F2[Avalara]
+  B --> X[FX Engine (SPI)]
+  B --> DB[(Supabase Postgres)]
+  D --> B
+  X --> DB
+```
