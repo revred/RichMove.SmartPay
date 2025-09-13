@@ -1,3 +1,16 @@
+# === WP2: Secret management (red-first) ===
+# Ignore all real secrets; keep only samples
+/secrets/*
+!/secrets/*.sample.env
+!/secrets/README.md
+
+# Common OS/editor noise
+.DS_Store
+Thumbs.db
+
+# User-specific .NET secrets remain outside repo; keep here for completeness
+*.secrets.env
+
 # Build
 bin/
 obj/
