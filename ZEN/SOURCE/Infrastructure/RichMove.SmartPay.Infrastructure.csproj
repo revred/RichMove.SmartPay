@@ -10,7 +10,6 @@
     <!-- Ensure Npgsql is available for Supabase/Postgres access -->
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Microsoft.Extensions.Options" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
 
   <ItemGroup>

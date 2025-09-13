@@ -30,7 +30,8 @@
       "Bash(zip:*)",
       "Bash(where 7z)",
       "Bash(xargs cat:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []
