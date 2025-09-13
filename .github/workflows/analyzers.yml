@@ -1,0 +1,19 @@
+name: analyzers
+on:
+  pull_request:
+    branches: [ "main", "master" ]
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore tools
+        run: dotnet tool restore
+      - name: Format check
+        run: dotnet format --verify-no-changes || true
+      - name: Roslynator analysis (advisory)
+        run: roslynator analyze ZEN --severity-level info || true

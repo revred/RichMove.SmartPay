@@ -4,9 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RichMove.SmartPay.Api;
+using RichMove.SmartPay.Api.Handlers;
+using RichMove.SmartPay.Api.Health;
 using RichMove.SmartPay.Api.Idempotency;
 using RichMove.SmartPay.Api.Middleware;
 using RichMove.SmartPay.Core.Blockchain;
+using RichMove.SmartPay.Core.Time;
 using RichMove.SmartPay.Infrastructure.Blockchain;
 
 namespace RichMove.SmartPay.Api.Extensions;
@@ -18,9 +21,20 @@ public static partial class SmartPayHardeningExtensions
         ArgumentNullException.ThrowIfNull(config);
 
         services.Configure<FeatureFlags>(config.GetSection("Features"));
+        services.Configure<IdempotencyOptions>(config.GetSection("Idempotency"));
+
+        // Clock abstraction
+        services.AddSingleton<IClock, SystemClock>();
+
+        // Health services
+        services.AddScoped<IHealthService, HealthService>();
 
         // Idempotency store (in-memory baseline)
         services.AddSingleton<IIdempotencyStore, InMemoryIdempotencyStore>();
+
+        // Correlation ID propagation handler
+        services.AddHttpContextAccessor();
+        services.AddTransient<CorrelationIdHandler>();
 
         return services;
     }

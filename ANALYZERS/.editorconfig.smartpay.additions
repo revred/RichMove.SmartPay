@@ -1,0 +1,33 @@
+# SmartPay analyzer additions (non-enforcing; suggestions only until adopted)
+
+root = false
+
+[*.cs]
+dotnet_analyzer_diagnostic.severity = suggestion
+
+# Prefer explicit StringComparison
+dotnet_diagnostic.CA1307.severity = warning
+dotnet_diagnostic.CA1309.severity = warning
+
+# Seal types where possible
+dotnet_diagnostic.CA1852.severity = suggestion
+
+# Mark structs readonly
+dotnet_diagnostic.CA1829.severity = suggestion
+
+# Avoid unnecessary allocations
+dotnet_diagnostic.IDE0057.severity = suggestion   # use range operator
+dotnet_diagnostic.IDE0055.severity = suggestion   # formatting
+dotnet_diagnostic.IDE0044.severity = suggestion   # add readonly modifier
+
+# Use LoggerMessage
+dotnet_diagnostic.CA1848.severity = suggestion
+
+# Prefer local functions over lambdas when appropriate
+dotnet_diagnostic.IDE0039.severity = silent
+
+# Name preferences
+dotnet_style_qualification_for_field = true:suggestion
+dotnet_style_qualification_for_property = true:suggestion
+dotnet_style_qualification_for_method = false:silent
+dotnet_style_parentheses_in_arithmetic_binary_operators = always_for_clarity:suggestion

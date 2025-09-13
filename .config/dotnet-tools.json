@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "dotnet-format": {
+      "version": "8.0.400",
+      "commands": [ "dotnet-format" ]
+    },
+    "roslynator.dotnet.cli": {
+      "version": "0.8.0",
+      "commands": [ "roslynator" ]
+    }
+  }
+}

@@ -1,12 +1,12 @@
 using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using RichMove.SmartPay.Api.Constants;
 
 namespace RichMove.SmartPay.Api.Middleware;
 
 public sealed class CorrelationIdMiddleware
 {
-    public const string HeaderName = "X-Correlation-Id";
     private readonly RequestDelegate _next;
 
     public CorrelationIdMiddleware(RequestDelegate next) => _next = next;
@@ -15,15 +15,15 @@ public sealed class CorrelationIdMiddleware
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        if (!context.Request.Headers.TryGetValue(HeaderName, out var corr) || string.IsNullOrWhiteSpace(corr))
+        if (!context.Request.Headers.TryGetValue(HeaderNames.CorrelationId, out var corr) || string.IsNullOrWhiteSpace(corr))
         {
             corr = Guid.NewGuid().ToString("N");
-            context.Request.Headers[HeaderName] = corr;
+            context.Request.Headers[HeaderNames.CorrelationId] = corr;
         }
 
         context.Response.OnStarting(() =>
         {
-            context.Response.Headers[HeaderName] = corr.ToString();
+            context.Response.Headers[HeaderNames.CorrelationId] = corr.ToString();
             return Task.CompletedTask;
         });
 

@@ -1,0 +1,471 @@
+diff --git a/REVIEW/CodeReview/ChatGPT/TopN/20250914/0017_TOP100_MicroImprovements.md b/REVIEW/CodeReview/ChatGPT/TopN/20250914/0017_TOP100_MicroImprovements.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/TopN/20250914/0017_TOP100_MicroImprovements.md
+@@ -0,0 +1,412 @@
++# Top 100 Small-but-Impactful Improvements (WP1+WP2+WP3 complete, Blockchain optional, Gulf corridors, AUD Tier‑1)
++
++> Philosophy: avoid rewrites. Prefer **low-risk, incremental** changes that improve clarity, correctness, performance, security, and DX.
++> Everything here can be landed piecemeal. Many items are docs/config/CI only.
++
++## A. API correctness & surface hygiene
++1. **Use explicit `StringComparison`** in all string comparisons (prefer `Ordinal` / `OrdinalIgnoreCase`).
++2. **Normalize header names** to constants (e.g., `X-Correlation-Id`, `Idempotency-Key` in one place).
++3. **Fail closed on unknown JSON fields** (keep `additionalProperties: false` in schemas; ensure API rejects unexpected members).
++4. **Pagination invariants** documented and enforced: cap page size, stable sort keys, `Link` headers (`next`, `prev`).
++5. **RFC7807 everywhere**: ensure even validation failures return ProblemDetails (status + traceId).
++6. **Idempotency TTL** doc states 24h; add config key (`Idempotency:Hours=24`) for environments.
++7. **Correlation ID propagation** to outbound calls (providers) via a single delegating handler.
++8. **Explicit DTO immutability**: prefer `record` types for API contracts (no behavior change yet; guidance only).
++9. **Versioned routes** consistently: `/api/v1/...` only (reserve `/internal/*` for ops).
++10. **Model binding limits**: set max request body size for public endpoints in docs/runbook.
++
++## B. Performance & allocation discipline
++11. **Prefer `ReadOnlySpan<char>`** for hot-path parsing (e.g., currency codes) when implemented.
++12. **Avoid LINQ in hot paths**; pre-allocate lists with known capacity.
++13. **Use `LoggerMessage.Define`** for high-volume logs to avoid boxing/allocations.
++14. **Prefer `ValueTask`** for truly hot async paths where a sync result is likely.
++15. **Cache `Regex` with `[GeneratedRegex]`** for stable patterns (ISO-4217, GUIDs).
++16. **Use pooled arrays** with `ArrayPool<T>` for transient big buffers (docs-first now).
++17. **Avoid `ToLower()`/`ToUpper()`** without culture; use `Equals(..., OrdinalIgnoreCase)`.
++18. **Pre-size dictionaries** using expected counts to reduce rehashing.
++19. **Seal classes** that are not designed for inheritance (perf + clarity).
++20. **Mark structs `readonly`** where all fields are immutable; avoid defensive copies.
++
++## C. Reliability & resiliency
++21. **Retry taxonomy** table for providers with backoff defaults.
++22. **Circuit breaker** policy documented (minimal Polly pattern; wire later).
++23. **Graceful shutdown budget**: 5s default; ensure background queues complete or flush.
++24. **Admission control** for expensive endpoints (429 + `Retry-After`).
++25. **Time budget** per request: log if over 250ms (warn) / 1s (error) on Null providers.
++26. **Ready vs live**: never check external deps on `/health/live`.
++27. **Outbox persistence rules** written (even if not yet implemented).
++28. **Clock abstraction** (`IClock`) mandated in Core; wall-clock only at edges.
++29. **Idempotency store cold-start**: purge expired keys at first use.
++30. **Correlation ID echo** always; never generate multiple IDs per request.
++
++## D. Security & privacy
++31. **PII redaction helper**: one place to scrub logs; usage documented at boundaries.
++32. **Input canonicalization**: trim and reject leading/trailing spaces in currency codes.
++33. **Unicode confusables guard** for currency and client IDs (basic homoglyph check).
++34. **Deny user-provided URLs** unless on allowlist; use HEAD; no redirects.
++35. **Static analysis**: CodeQL workflow active; SLA to triage within 2d.
++36. **Gitleaks tuning**: ensure test fixtures allowlisted; keep rule active on PRs.
++37. **Dependency audit cadence** documented (Renovate/weekly).
++38. **Principle of least privilege for env vars**: known allowlist per service.
++39. **CSP for any future dashboard**: documented baseline (no inline scripts).
++40. **Webhook signature scheme** documented (HMAC SHA‑256 + timestamp window).
++
++## E. Observability & ops
++41. **OpenTelemetry wiring plan** (traces, metrics, logs) documented with namespace `richmove.smartpay.*`.
++42. **Pre-allocated log scopes** for frequent fields (corrId, clientId).
++43. **Health annotations**: add reason codes in `/ready` (e.g., `config.invalid`, `keystore.unreachable`).
++44. **Synthetic monitor scripts**: cURL snippets for quote happy path.
++45. **SLOs** posted in repo; error budget burn runbook.
++46. **Incident template**: timestamps, corrIds, suspected component, blast-radius.
++47. **Rate-limit counters**: standard names + how to read them.
++48. **Queue depth metrics** (if/when blockchain enabled): definitions.
++49. **Cold-start tracker**: first-request latency logged once per deploy.
++50. **Feature-flag change log**: append-only text file in ops docs for toggles.
++
++## F. DX & repo hygiene
++51. **Makefile** targets for `analyze`, `contracts`, `perf` (non-failing by default).
++52. **.editorconfig (additions)**: enforce parentheses, var preferences, simplify names.
++53. **Nullable**: plan to enable project-wide incrementally; start with warnings only.
++54. **IDE analyzers**: suggest `in` parameters where beneficial (docs).
++55. **Use `IReadOnlyList<>`/`IReadOnlyDictionary<>`** for outward interfaces (guidance).
++56. **Public surface review**: ensure internal types are not exposed accidentally.
++57. **CODEOWNERS** for Core/API/Docs folders to guarantee review expertise.
++58. **PR checklist**: include perf/alloc check when touching hot code.
++59. **Commit message convention**: Conventional Commits (docs + template).
++60. **Developer onboarding**: one 5‑minute script (Postman + examples + smoke test).
++
++## G. Tests & quality gates
++61. **Contract tests** validate all examples (including AUD corridors).
++62. **Golden approval files** for rounding/fees (deterministic via `IClock`).
++63. **Property-based tests** around currency normalization and amount ranges.
++64. **Test data builders** to reduce duplication.
++65. **Load smoke** 100 rps/30s (Null providers); p99 < 200ms gate (advisory).
++66. **Mutation testing** baseline with realistic thresholds.
++67. **Flaky test tracker** doc with quarantine policy.
++68. **CI matrix**: Debug + Release build; run tests in Release.
++69. **Schema compliance** tests for every public payload (JSON Schema validation).
++70. **Postman CI smoke** step (collection runner with two happy paths).
++
++## H. Documentation & contracts
++71. **Single source of truth** for error catalog (RFC7807) with stable codes.
++72. **OpenAPI examples**: include AUD→EUR and AUD→AED corridors.
++73. **SDK snippets** (TS/C#) show idempotency header usage.
++74. **Partner checklist** for KYC/FX providers (scopes, rate limits, webhooks).
++75. **Feature flags** documented with defaults and blast radius.
++76. **ADR index** page listing current decisions.
++77. **Currency roster** doc lists Tier‑1 and how to add Tier‑2.
++78. **Security posture** page (WAF, rate limits, allowlists).
++79. **Runbooks**: toggle flags, rollback, incident response.
++80. **Glossary** of terms (idempotency, correlation, outbox, ledger, SLO).
++
++## I. Low-risk code helpers to adopt gradually
++81. **`Ensure` guard helpers** with `[MethodImpl(AggressiveInlining)]` for null/empty checks.
++82. **`Patterns` static class** with `[GeneratedRegex]` for ISO codes.
++83. **`Log` static partial** using `LoggerMessage.Define` for hot logs.
++84. **`Ascii` comparers** for token/header comparisons.
++85. **`Money` rounding utilities** (docs + helpers, not a domain type).
++86. **`Headers` constants** centralizing header names.
++87. **`ProblemFactory`** to emit consistent RFC7807 payloads in custom handlers.
++88. **`Clock` implementations**: `SystemClock` + `FixedClock` for tests.
++89. **`IdGenerator`** based on `Xoshiro`/`Guid` (docs-first; default Guid).
++90. **`Utf8Json` helpers** for writer/reader usage (docs + examples).
++
++## J. Security & compliance quick wins
++91. **Secrets inventory** doc (owners + rotation cadence).
++92. **Key rotation** runbook with commands/placeholders.
++93. **DSAR/erasure** process doc (if/when PII stored).
++94. **Egress allowlist** doc for provider IPs.
++95. **Transport security** checklist (TLS, HSTS defaults) for future dashboards.
++96. **Rate-limit tiers** documented (guest, partner, internal).
++97. **Auth scopes sketch** for future auth (app vs partner).
++98. **Webhook replay window** documented (5 minutes default).
++99. **Error message hygiene**: no secrets / internals in ProblemDetails `detail`.
++100. **Third-party dependency policy**: criteria to add/remove libraries.
++
++---
++### How to land safely
++- This patch adds **helpers, analyzers config (as samples), docs, and CI**. No existing classes are rewritten.
++- Adopt helpers opportunistically as files are touched. Use the PR checklist to nudge better patterns.
++
++
+diff --git a/DOCS/Engineering/Coding_Guidelines.ReadOnlyAndAllocations.md b/DOCS/Engineering/Coding_Guidelines.ReadOnlyAndAllocations.md
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/DOCS/Engineering/Coding_Guidelines.ReadOnlyAndAllocations.md
+@@ -0,0 +1,152 @@
++# Read‑only & Allocation Guidelines (C#)
++
++> Objective: small, surgical changes that reduce allocations and clarify intent—without rewrites.
++
++## Read‑only intent
++- Prefer `record` for DTOs and domain value objects.
++- Mark fields `readonly` when set in ctor only.
++- Mark structs `readonly` when all fields are immutable.
++- Seal classes not designed for inheritance.
++- Prefer `IReadOnlyList<>`/`IReadOnlyDictionary<>` on outward-facing APIs.
++- Use `in` parameters for large structs; avoid for reference types.
++
++## Strings & comparisons
++- Always specify `StringComparison` (`Ordinal` or `OrdinalIgnoreCase` for tokens/IDs).
++- Avoid `ToLower()/ToUpper()`; use case-insensitive comparisons.
++- Avoid unnecessary substrings; prefer indexing/slicing (`ReadOnlySpan<char>` where hot).
++- Trim and validate inputs at boundaries; reject mixed/hidden whitespace.
++
++## Collections
++- Pre-size `List<>`/`Dictionary<>` when count is known.
++- Use `ArrayPool<T>` for large transient buffers.
++- Avoid `.ToList()` on hot paths; stream results when possible.
++
++## Regex
+-- Use `[GeneratedRegex]` for static patterns (compile‑time generated).
++- Keep patterns central (`Patterns` class) for reuse.
++
++## Logging
++- Use `LoggerMessage.Define` for high-frequency logs to avoid boxing and message-template parsing costs.
++- Prefer structured logging (key/value) over string concatenation.
++
++## Async
++- Return `ValueTask` only when a sync completion is common; otherwise use `Task`.
++- Avoid async on methods that never await (will generate state machine).
++
++## JSON
++- Prefer `System.Text.Json` with source-gen (future) or careful options.
++- Reuse `JsonSerializerOptions` singletons.
++- Use `Utf8JsonWriter` for hot serialization loops (future).
++
++## Examples
++```csharp
++// String comparison
++if (!header.Equals("application/json", StringComparison.OrdinalIgnoreCase)) { ... }
++
++// Generated regex (see Patterns below)
++if (!Patterns.Iso4217().IsMatch(code)) return false;
++
++// LoggerMessage.Define
++private static readonly Action<ILogger, string, Exception?> _fxQuoted =
++    LoggerMessage.Define<string>(LogLevel.Information, new EventId(1001, "FxQuoted"),
++    "FX quoted for {Pair}");
++
++public static void FxQuoted(ILogger logger, string pair) => _fxQuoted(logger, pair, null);
++```
++
+diff --git a/ANALYZERS/.editorconfig.smartpay.additions b/ANALYZERS/.editorconfig.smartpay.additions
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ANALYZERS/.editorconfig.smartpay.additions
+@@ -0,0 +1,92 @@
++# SmartPay analyzer additions (non-enforcing; suggestions only until adopted)
++
++root = false
++
++[*.cs]
++dotnet_analyzer_diagnostic.severity = suggestion
++
++# Prefer explicit StringComparison
++dotnet_diagnostic.CA1307.severity = warning
++dotnet_diagnostic.CA1309.severity = warning
++
++# Seal types where possible
++dotnet_diagnostic.CA1852.severity = suggestion
++
++# Mark structs readonly
++dotnet_diagnostic.CA1829.severity = suggestion
++
++# Avoid unnecessary allocations
++dotnet_diagnostic.IDE0057.severity = suggestion   # use range operator
++dotnet_diagnostic.IDE0055.severity = suggestion   # formatting
++dotnet_diagnostic.IDE0044.severity = suggestion   # add readonly modifier
++
++# Use LoggerMessage
++dotnet_diagnostic.CA1848.severity = suggestion
++
++# Prefer local functions over lambdas when appropriate
++dotnet_diagnostic.IDE0039.severity = silent
++
++# Name preferences
++dotnet_style_qualification_for_field = true:suggestion
++dotnet_style_qualification_for_property = true:suggestion
++dotnet_style_qualification_for_method = false:silent
++dotnet_style_parentheses_in_arithmetic_binary_operators = always_for_clarity:suggestion
++
+diff --git a/ANALYZERS/Directory.Build.props.sample b/ANALYZERS/Directory.Build.props.sample
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/ANALYZERS/Directory.Build.props.sample
+@@ -0,0 +1,23 @@
++<Project>
++  <PropertyGroup>
++    <EnableNETAnalyzers>true</EnableNETAnalyzers>
++    <AnalysisMode>AllEnabledByDefault</AnalysisMode>
++    <AnalysisLevel>latest</AnalysisLevel>
++    <!-- Nullable can be enabled incrementally in projects -->
++    <!--<Nullable>enable</Nullable>-->
++  </PropertyGroup>
++  <ItemGroup>
++    <AdditionalFiles Include="$(MSBuildThisFileDirectory).editorconfig.smartpay.additions" />
++  </ItemGroup>
++</Project>
++
+diff --git a/.config/dotnet-tools.json b/.config/dotnet-tools.json
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/.config/dotnet-tools.json
+@@ -0,0 +1,26 @@
++{
++  "version": 1,
++  "isRoot": true,
++  "tools": {
++    "dotnet-format": {
++      "version": "8.0.400",
++      "commands": [ "dotnet-format" ]
++    },
++    "roslynator.dotnet.cli": {
++      "version": "0.8.0",
++      "commands": [ "roslynator" ]
++    }
++  }
++}
++
+diff --git a/.github/workflows/analyzers.yml b/.github/workflows/analyzers.yml
+new file mode 100644
+index 0000000..6666666
+--- /dev/null
++++ b/.github/workflows/analyzers.yml
+@@ -0,0 +1,41 @@
++name: analyzers
++on:
++  pull_request:
++    branches: [ "main", "master" ]
++jobs:
++  analyze:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Setup .NET
++        uses: actions/setup-dotnet@v4
++        with:
++          dotnet-version: '8.0.x'
++      - name: Restore tools
++        run: dotnet tool restore
++      - name: Format check
++        run: dotnet format --verify-no-changes || true
++      - name: Roslynator analysis (advisory)
++        run: roslynator analyze ZEN --severity-level info || true
++
+diff --git a/ZEN/SOURCE/Core/Guards/Ensure.cs b/ZEN/SOURCE/Core/Guards/Ensure.cs
+new file mode 100644
+index 0000000..7777777
+--- /dev/null
++++ b/ZEN/SOURCE/Core/Guards/Ensure.cs
+@@ -0,0 +1,48 @@
++using System;
++using System.Runtime.CompilerServices;
++
++namespace RichMove.SmartPay.Core.Guards;
++
++internal static class Ensure
++{
++    [MethodImpl(MethodImplOptions.AggressiveInlining)]
++    public static void NotNull<T>(T? value, string paramName) where T : class
++        => ArgumentNullException.ThrowIfNull(value, paramName);
++
++    [MethodImpl(MethodImplOptions.AggressiveInlining)]
++    public static void NotNull<T>(T? value, string paramName) where T : struct
++    {
++        if (value == null) throw new ArgumentNullException(paramName);
++    }
++
++    [MethodImpl(MethodImplOptions.AggressiveInlining)]
++    public static void NotNullOrWhiteSpace(string? value, string paramName)
++    {
++        if (string.IsNullOrWhiteSpace(value))
++            throw new ArgumentException("Value cannot be null or whitespace.", paramName);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Core/Patterns/Patterns.cs b/ZEN/SOURCE/Core/Patterns/Patterns.cs
+new file mode 100644
+index 0000000..8888888
+--- /dev/null
++++ b/ZEN/SOURCE/Core/Patterns/Patterns.cs
+@@ -0,0 +1,18 @@
++using System.Text.RegularExpressions;
++
++namespace RichMove.SmartPay.Core.Patterns;
++
++public static partial class Patterns
++{
++    // ISO-4217 currency code
++    [GeneratedRegex("^[A-Z]{3}$")]
++    public static partial Regex Iso4217();
++
++    // Correlation-ID (basic GUID w/o braces)
++    [GeneratedRegex("^[0-9a-fA-F\\-]{36}$")]
++    public static partial Regex Guid36();
++}
++
+diff --git a/ZEN/SOURCE/Core/Diagnostics/Log.cs b/ZEN/SOURCE/Core/Diagnostics/Log.cs
+new file mode 100644
+index 0000000..9999999
+--- /dev/null
++++ b/ZEN/SOURCE/Core/Diagnostics/Log.cs
+@@ -0,0 +1,41 @@
++using System;
++using Microsoft.Extensions.Logging;
++
++namespace RichMove.SmartPay.Core.Diagnostics;
++
++public static class Log
++{
++    private static readonly Action<ILogger, string, string, Exception?> _fxQuoted =
++        LoggerMessage.Define<string, string>(LogLevel.Information, new EventId(1001, nameof(FxQuoted)),
++            "FX quoted for {Base}->{Quote}");
++
++    private static readonly Action<ILogger, string, Exception?> _idempotencyConflict =
++        LoggerMessage.Define<string>(LogLevel.Warning, new EventId(2001, nameof(IdempotencyConflict)),
++            "Idempotency conflict for key {Key}");
++
++    public static void FxQuoted(ILogger logger, string @base, string quote)
++        => _fxQuoted(logger, @base, quote, null);
++
++    public static void IdempotencyConflict(ILogger logger, string key)
++        => _idempotencyConflict(logger, key, null);
++}
++
+diff --git a/DOCS/PERF/ZeroAllocPlaybook.md b/DOCS/PERF/ZeroAllocPlaybook.md
+new file mode 100644
+index 0000000..aaaaaaa
+--- /dev/null
++++ b/DOCS/PERF/ZeroAllocPlaybook.md
+@@ -0,0 +1,108 @@
++# Zero‑ish Allocation Playbook (when it matters)
++
++> Use only on hot paths. Profile first; optimize second.
++
++## Strings
++- Avoid `string.Concat`/interpolation in tight loops; prefer structured logging.
++- Avoid case transforms; use `StringComparison` overloads.
++- Avoid `Substring`; use ranges or spans where beneficial.
++
++## Buffers
++- Use `ArrayPool<T>` for transient buffers > 4 KB.
++- Always return pooled arrays in `finally`.
++
++## JSON
++- Reuse `JsonSerializerOptions` instances.
++- Consider `Utf8JsonWriter` for hot serialization; keep payloads small and flat.
++
++## Collections
++- Pre-size collections when count is known.
++- Prefer `foreach` over LINQ in tight loops.
++
++## Exceptions
++- Do not use exceptions for control flow; return `Result<T>`/error code objects at boundaries.
++
++## Logging
++- Use `LoggerMessage.Define` for high-frequency paths.
++
++## Tooling
++- BenchmarkDotNet projects (future) to measure changes; never optimize blind.
++
+diff --git a/DOCS/OPS/Playbooks/Headers.md b/DOCS/OPS/Playbooks/Headers.md
+new file mode 100644
+index 0000000..bbbbbbb
+--- /dev/null
++++ b/DOCS/OPS/Playbooks/Headers.md
+@@ -0,0 +1,44 @@
++# Standard Headers
++
++| Header             | Direction | Required | Notes |
++|--------------------|-----------|----------|-------|
++| `X-Correlation-Id` | in/out    | yes      | Echoed on responses; propagated to providers. |
++| `Idempotency-Key`  | in        | for writes | Unique per write request for 24h window. |
++| `Content-Type`     | in        | yes      | `application/json` for API POST bodies. |
++| `Accept`           | in        | optional | Prefer `application/json`. |
++
++**Conventions**
++- Header names are case-insensitive; we keep canonical casing above.
++- Correlation IDs are GUIDs (36 chars); any opaque string is accepted.
++
+diff --git a/REVIEW/CodeReview/ChatGPT/PatchOn/20250914/0017_TOP100_MicroImprovements.NOTES.md b/REVIEW/CodeReview/ChatGPT/PatchOn/20250914/0017_TOP100_MicroImprovements.NOTES.md
+new file mode 100644
+index 0000000..ccccccc
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/PatchOn/20250914/0017_TOP100_MicroImprovements.NOTES.md
+@@ -0,0 +1,66 @@
++# Patch Notes — 0017 Top‑100 Micro Improvements
++
++This patch **adds docs, analyzer configs (as samples), CI, and helper classes** to make it easy to adopt 100 small improvements—without rewriting existing code.
++
++## What’s added
++- **Top‑100 list**: actionable, low-risk tasks you can land piecemeal.
++- **Read‑only & allocations guide**: clear standards for immutability and low‑alloc patterns.
++- **Analyzer config (sample)**: `.editorconfig.smartpay.additions` + `Directory.Build.props.sample` to opt-in analyzers.
++- **CI**: `analyzers` workflow with format check and Roslynator (advisory).
++- **Core helpers**: `Ensure`, `Patterns` (GeneratedRegex), and `Log` (LoggerMessage).
++- **Perf playbook** and **headers playbook** for ops/devs.
++
++## Why this is safe
++- No existing files are modified; everything is additive.
++- Analyzer rules are **suggestions** until you opt-in by renaming `Directory.Build.props.sample`.
++- Helper classes are inert until referenced.
++
++## Adoption path
++1. Land patch → review docs with devs.
++2. Enable analyzers by copying `ANALYZERS/Directory.Build.props.sample` to repo root as `Directory.Build.props`.
++3. Start using `Ensure`, `Patterns`, and `Log` in touched files.
++4. Track progress with the Top‑100 list; check off items per PR.
++
++— ChatGPT
++

@@ -9,6 +9,7 @@ using FastEndpoints.Swagger;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using RichMove.SmartPay.Api.Extensions;
+using RichMove.SmartPay.Api.Health;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -74,11 +75,28 @@ app.UseHttpsRedirection();
 // Health endpoints per ChatGPT review
 app.MapGet("/health/live", () => Results.Ok("Healthy"))
     .WithName("LivenessCheck")
-    .WithSummary("Liveness check - app is up");
+    .WithSummary("Liveness check - app is up (no external deps checked)");
 
-app.MapGet("/health/ready", () => Results.Ok("Ready"))
+app.MapGet("/health/ready", async (IHealthService healthService, CancellationToken ct) =>
+{
+    var result = await healthService.CheckReadinessAsync(ct);
+
+    if (result.IsHealthy)
+    {
+        return Results.Ok(new { status = result.Status });
+    }
+
+    var response = new
+    {
+        status = result.Status,
+        reasonCode = result.ReasonCode,
+        description = result.Description
+    };
+
+    return Results.Json(response, statusCode: 503);
+})
     .WithName("ReadinessCheck")
-    .WithSummary("Readiness check - deps ready (always 200 in WP1)");
+    .WithSummary("Readiness check - validates internal components");
 
 // Legacy endpoint for compatibility
 app.MapHealthChecks("/health");

@@ -35,7 +35,8 @@ public class HealthEndpointTests : IClassFixture<TestWebApplicationFactory>
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
-        content.Should().Be("\"Ready\""); // JSON quoted response
+        content.Should().Contain("ready"); // New robust JSON response format
+        content.Should().Contain("status"); // Contains status field
     }
 
     [Fact]
