@@ -1,0 +1,219 @@
+diff --git a/ZEN/SOURCE/Api/Api.csproj b/ZEN/SOURCE/Api/Api.csproj
+index 1a2b3c4..5d6e7f8 100644
+--- a/ZEN/SOURCE/Api/Api.csproj
++++ b/ZEN/SOURCE/Api/Api.csproj
+@@ -10,6 +10,13 @@
+     <ImplicitUsings>enable</ImplicitUsings>
+   </PropertyGroup>
+ 
++  <!-- WP1.2: FastEndpoints packages -->
++  <ItemGroup>
++    <PackageReference Include="FastEndpoints" Version="6.*" />
++    <PackageReference Include="FastEndpoints.Swagger" Version="6.*" />
++  </ItemGroup>
++
+   <ItemGroup>
+     <ProjectReference Include="..\..\Core\Core.csproj" />
+     <ProjectReference Include="..\..\Infrastructure\Infrastructure.csproj" />
+diff --git a/ZEN/SOURCE/Api/Program.cs b/ZEN/SOURCE/Api/Program.cs
+index f2f2f2f..0a0a0a0 100644
+--- a/ZEN/SOURCE/Api/Program.cs
++++ b/ZEN/SOURCE/Api/Program.cs
+@@ -1,10 +1,16 @@
+ using Microsoft.AspNetCore.Builder;
+ using Microsoft.Extensions.DependencyInjection;
+ using Microsoft.Extensions.Hosting;
+ using RichMove.SmartPay.Infrastructure.ForeignExchange;
+ using RichMove.SmartPay.Core.ForeignExchange;
++using FastEndpoints;
++using FastEndpoints.Swagger;
+ 
+ var builder = WebApplication.CreateBuilder(args);
+ 
+ // existing services...
+ builder.Services.AddEndpointsApiExplorer();
+-builder.Services.AddSwaggerGen();
++builder.Services.AddSwaggerGen(); // keep Swashbuckle for existing controllers (if any)
+ builder.Services.AddControllers();
+ 
+ // WP2: FX pricing (first cut)
+@@ -15,13 +21,26 @@ builder.Services.Configure<FxPricingOptions>(builder.Configuration.GetSection("FX:Pricing"));
+ builder.Services.AddSingleton<IFxRateSource, InMemoryFxRateSource>();
+ builder.Services.AddSingleton<IFxQuoteProvider, SimpleFxQuoteProvider>();
+ 
++// WP1.2: FastEndpoints bootstrap (coexists with MVC controllers)
++builder.Services.AddFastEndpoints();
++builder.Services.SwaggerDocument(); // FastEndpoints.Swagger (NSwag) doc+UI
++
+ var app = builder.Build();
+ 
+ if (app.Environment.IsDevelopment())
+ {
+     app.UseSwagger();
+     app.UseSwaggerUI();
+ }
+ 
+-// WP2: map controllers (FxController)
++// WP1.2: enable FastEndpoints
++app.UseFastEndpoints();
++
++// WP1.2: enable FE Swagger (served at /swagger and /swagger/index.html by default)
++app.UseSwaggerGen();
++
++// WP2: map controllers (keep existing controllers)
+ app.MapControllers();
+ 
+ // existing health endpoints remain unchanged
+ 
+ app.Run();
+diff --git a/ZEN/SOURCE/Api/Endpoints/Fx/CreateFxQuoteEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Fx/CreateFxQuoteEndpoint.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Fx/CreateFxQuoteEndpoint.cs
+@@ -0,0 +1,72 @@
++using FastEndpoints;
++using RichMove.SmartPay.Core.ForeignExchange;
++
++namespace RichMove.SmartPay.Api.Endpoints.Fx;
++
++/// <summary>
++/// FastEndpoints version of the FX quote endpoint.
++/// Replaces the MVC controller route: POST /v1/fx/quotes
++/// </summary>
++public sealed class CreateFxQuoteEndpoint : Endpoint<FxQuoteRequest, FxQuoteResult>
++{
++    private readonly IFxQuoteProvider _provider;
++
++    public CreateFxQuoteEndpoint(IFxQuoteProvider provider) => _provider = provider;
++
++    public override void Configure()
++    {
++        Post("/v1/fx/quotes");
++        AllowAnonymous();
++
++        Summary(s =>
++        {
++            s.Summary = "Create FX quote";
++            s.Description = "Generate an FX quote from mid-rate + configured pricing (markup/fee).";
++            s.Tags = new[] { "fx" };
++        });
++    }
++
++    public override Task HandleAsync(FxQuoteRequest req, CancellationToken ct)
++    {
++        var quote = _provider.Quote(req);
++        return SendOkAsync(quote, ct);
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Endpoints/Fx/FxQuoteRequestValidator.cs b/ZEN/SOURCE/Api/Endpoints/Fx/FxQuoteRequestValidator.cs
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Fx/FxQuoteRequestValidator.cs
+@@ -0,0 +1,31 @@
++using FastEndpoints;
++using RichMove.SmartPay.Core.ForeignExchange;
++
++namespace RichMove.SmartPay.Api.Endpoints.Fx;
++
++/// <summary>
++/// Basic validation for FX quote requests.
++/// </summary>
++public sealed class FxQuoteRequestValidator : Validator<FxQuoteRequest>
++{
++    public FxQuoteRequestValidator()
++    {
++        RuleFor(x => x.SourceCurrency)
++            .NotEmpty().WithMessage("Source currency is required.")
++            .Length(3).WithMessage("Source currency must be a 3-letter ISO code.");
++
++        RuleFor(x => x.TargetCurrency)
++            .NotEmpty().WithMessage("Target currency is required.")
++            .Length(3).WithMessage("Target currency must be a 3-letter ISO code.");
++
++        RuleFor(x => x.SourceAmount)
++            .GreaterThan(0m).WithMessage("Source amount must be greater than zero.");
++    }
++}
++
+diff --git a/ZEN/SOURCE/Api/Controllers/FxController.cs b/ZEN/SOURCE/Api/Controllers/FxController.cs
+deleted file mode 100644
+index 6666666..0000000
+--- a/ZEN/SOURCE/Api/Controllers/FxController.cs
++++ /dev/null
+@@ -1,60 +0,0 @@
+-using Microsoft.AspNetCore.Mvc;
+-using RichMove.SmartPay.Core.ForeignExchange;
+-
+-namespace RichMove.SmartPay.Api.Controllers;
+-
+-[ApiController]
+-[Route("v1/[controller]")]
+-public sealed class FxController : ControllerBase
+-{
+-    private readonly IFxQuoteProvider _provider;
+-
+-    public FxController(IFxQuoteProvider provider) => _provider = provider;
+-
+-    /// <summary>Create an FX quote.</summary>
+-    [HttpPost("quotes")]
+-    [ProducesResponseType(typeof(FxQuoteResult), StatusCodes.Status200OK)]
+-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+-    public IActionResult CreateQuote([FromBody] FxQuoteRequest request)
+-    {
+-        if (string.IsNullOrWhiteSpace(request.SourceCurrency) ||
+-            string.IsNullOrWhiteSpace(request.TargetCurrency) ||
+-            request.SourceCurrency?.Length != 3 ||
+-            request.TargetCurrency?.Length != 3 ||
+-            request.SourceAmount <= 0)
+-        {
+-            return ValidationProblem("Invalid quote request.");
+-        }
+-
+-        var quote = _provider.Quote(request);
+-        return Ok(quote);
+-    }
+-}
+-
+diff --git a/ZEN/TESTS/Api.Tests/FxQuoteFastEndpointsTests.cs b/ZEN/TESTS/Api.Tests/FxQuoteFastEndpointsTests.cs
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ZEN/TESTS/Api.Tests/FxQuoteFastEndpointsTests.cs
+@@ -0,0 +1,53 @@
++using System.Net;
++using System.Net.Http.Json;
++using Microsoft.AspNetCore.Mvc.Testing;
++using Xunit;
++
++namespace RichMove.SmartPay.Api.Tests;
++
++public sealed class FxQuoteFastEndpointsTests : IClassFixture<WebApplicationFactory<Program>>
++{
++    private readonly WebApplicationFactory<Program> _factory;
++
++    public FxQuoteFastEndpointsTests(WebApplicationFactory<Program> factory) => _factory = factory;
++
++    [Fact]
++    public async Task Post_Quotes_Returns_200_With_Valid_Input()
++    {
++        var client = _factory.CreateClient();
++        var req = new { sourceCurrency = "GBP", targetCurrency = "USD", sourceAmount = 100m };
++
++        var resp = await client.PostAsJsonAsync("/v1/fx/quotes", req);
++        resp.EnsureSuccessStatusCode();
++    }
++
++    [Fact]
++    public async Task Post_Quotes_Returns_400_On_Bad_Input()
++    {
++        var client = _factory.CreateClient();
++        var bad = new { sourceCurrency = "GB", targetCurrency = "", sourceAmount = 0m };
++
++        var resp = await client.PostAsJsonAsync("/v1/fx/quotes", bad);
++        Assert.Equal(HttpStatusCode.BadRequest, resp.StatusCode);
++    }
++}
++

@@ -31,6 +31,10 @@
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="6.8.1" />
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
 
+    <!-- WP1.2: FastEndpoints -->
+    <PackageVersion Include="FastEndpoints" Version="6.1.0" />
+    <PackageVersion Include="FastEndpoints.Swagger" Version="6.1.0" />
+
     <!-- Infrastructure -->
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.1" />
     <PackageVersion Include="Polly" Version="8.4.2" />

@@ -3,6 +3,8 @@ using RichMove.SmartPay.Core.Integrations;
 using RichMove.SmartPay.Infrastructure.Data;
 using RichMove.SmartPay.Infrastructure.ForeignExchange;
 using RichMove.SmartPay.Infrastructure.Integrations;
+using FastEndpoints;
+using FastEndpoints.Swagger;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,8 +24,12 @@ builder.Services.AddSingleton<IFxQuoteProvider, NullFxQuoteProvider>();
 builder.Services.AddSingleton<IShopifyClient, NullShopifyClient>();
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(); // keep Swashbuckle for existing controllers (if any)
 builder.Services.AddHealthChecks();
+
+// WP1.2: FastEndpoints bootstrap (coexists with MVC controllers)
+builder.Services.AddFastEndpoints();
+builder.Services.SwaggerDocument(); // FastEndpoints.Swagger (NSwag) doc+UI
 
 var app = builder.Build();
 
@@ -32,6 +38,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// WP1.2: enable FastEndpoints
+app.UseFastEndpoints();
+
+// WP1.2: enable FE Swagger (served at /swagger and /swagger/index.html by default)
+app.UseSwaggerGen();
 
 app.UseHttpsRedirection();
 
