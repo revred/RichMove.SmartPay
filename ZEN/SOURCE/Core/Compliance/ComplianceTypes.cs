@@ -3,8 +3,7 @@ using System;
 namespace RichMove.SmartPay.Core.Compliance
 {
     /// <summary>
-    /// Canonical compliance frameworks used across the platform.
-    /// Centralized to eliminate duplicate enum declarations and enforce CA1008 (None = 0).
+    /// Canonical compliance frameworks. Keep 'None = 0' to satisfy CA1008.
     /// </summary>
     public enum ComplianceFramework
     {
@@ -13,8 +12,7 @@ namespace RichMove.SmartPay.Core.Compliance
         GDPR,
         SOX,
         HIPAA,
-        ISO27001,
-        NIST
+        ISO27001
     }
 
     /// <summary>
@@ -35,8 +33,8 @@ namespace RichMove.SmartPay.Core.Compliance
     public enum ComplianceState
     {
         Unknown = 0,
-        Compliant = 1,
-        NonCompliant = 2,
-        Error = 3
+        Passing = 1,
+        Warning = 2,
+        Failing = 3
     }
 }

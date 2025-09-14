@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace RichMove.SmartPay.Core.Observability
 {
     /// <summary>
-    /// Central ActivitySource for RichMove.SmartPay tracing.
+    /// Single ActivitySource for distributed tracing across the platform.
     /// </summary>
     public static class SmartPayTracing
     {

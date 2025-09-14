@@ -831,3 +831,5 @@ public enum RiskLevel
     High,
     Critical
 }
+
+// NOTE: Compliance enums are centralized in RichMove.SmartPay.Core.Compliance.

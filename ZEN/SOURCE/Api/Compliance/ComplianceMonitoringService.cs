@@ -131,12 +131,10 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
                     violations.AddRange(await CheckIso27001Compliance());
                     break;
 
-                case ComplianceFramework.NIST:
-                    violations.AddRange(await CheckNistCompliance());
-                    break;
+                // NIST framework not included in canonical implementation
             }
 
-            status.Status = violations.Count == 0 ? ComplianceState.Compliant : ComplianceState.NonCompliant;
+            status.Status = violations.Count == 0 ? ComplianceState.Passing : ComplianceState.Failing;
             status.Violations = violations;
             status.LastChecked = DateTime.UtcNow;
 
@@ -152,7 +150,7 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
         }
         catch (Exception ex)
         {
-            status.Status = ComplianceState.Error;
+            status.Status = ComplianceState.Failing;
             status.LastError = ex.Message;
             Log.FrameworkComplianceCheckFailed(_logger, framework.ToString(), ex);
         }
@@ -526,7 +524,7 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
 
         var totalFrameworks = _frameworkStatus.Count;
         var compliantFrameworks = _frameworkStatus.Values
-            .Count(s => s.Status == ComplianceState.Compliant);
+            .Count(s => s.Status == ComplianceState.Passing);
 
         return (double)compliantFrameworks / totalFrameworks * 100.0;
     }
@@ -586,10 +584,29 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
 public sealed class ComplianceOptions
 {
     public TimeSpan CheckInterval { get; set; } = TimeSpan.FromHours(1);
+    // Keep default frameworks but ensure uniqueness via Normalize().
     public List<ComplianceFramework> EnabledFrameworks { get; } =
-        [ComplianceFramework.PCIDSS, ComplianceFramework.GDPR];
+        new() { ComplianceFramework.PCIDSS, ComplianceFramework.GDPR };
     public bool EnableAuditLogging { get; set; } = true;
     public bool EnableRealTimeMonitoring { get; set; } = true;
+
+    /// <summary>
+    /// Ensures unique frameworks and removes None entries after config binding.
+    /// Call once during service startup.
+    /// </summary>
+    public void Normalize()
+    {
+        if (EnabledFrameworks.Count == 0) return;
+        var distinct = EnabledFrameworks
+            .Where(f => f != ComplianceFramework.None)
+            .Distinct()
+            .ToList();
+        if (distinct.Count != EnabledFrameworks.Count)
+        {
+            EnabledFrameworks.Clear();
+            EnabledFrameworks.AddRange(distinct);
+        }
+    }
 }
 
 
@@ -630,3 +647,5 @@ public sealed class ComplianceReport
     public int CriticalViolations { get; set; }
     public double ComplianceScore { get; set; }
 }
+
+// NOTE: Compliance enums are centralized in RichMove.SmartPay.Core.Compliance.

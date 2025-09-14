@@ -61,7 +61,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
 
     public async Task<SanitizationResult> SanitizeAsync(string input, SanitizationContext context)
     {
-        using var activity = SmartPayTracing.Source.StartActivity("InputSanitization");
+        using var activity = Core.Observability.SmartPayTracing.Source.StartActivity("InputSanitization");
         var stopwatch = Stopwatch.StartNew();
 
         try
