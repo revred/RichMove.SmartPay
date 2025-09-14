@@ -43,6 +43,11 @@ public static partial class SmartPayHardeningExtensions
         services.Configure<ComplianceOptions>(config.GetSection("Compliance"));
         services.Configure<ThreatDetectionOptions>(config.GetSection("ThreatDetection"));
         services.Configure<SecurityPolicyOptions>(config.GetSection("SecurityPolicy"));
+        services.Configure<ApmOptions>(config.GetSection("Apm"));
+        services.Configure<DistributedTracingOptions>(config.GetSection("DistributedTracing"));
+        services.Configure<MetricsDashboardOptions>(config.GetSection("MetricsDashboard"));
+        services.Configure<AdvancedHealthCheckOptions>(config.GetSection("AdvancedHealthCheck"));
+        services.Configure<PerformanceProfilingOptions>(config.GetSection("PerformanceProfiling"));
 
         // Clock abstraction
         services.AddSingleton<IClock, SystemClock>();
@@ -91,6 +96,13 @@ public static partial class SmartPayHardeningExtensions
         services.AddHostedService<ComplianceMonitoringService>();
         services.AddHostedService<ThreatDetectionService>();
         services.AddHostedService<SecurityPolicyEngine>();
+
+        // Group 10: Advanced Monitoring & Observability services
+        services.AddHostedService<ApplicationPerformanceMonitoringService>();
+        services.AddHostedService<DistributedTracingService>();
+        services.AddHostedService<MetricsDashboardService>();
+        services.AddHostedService<AdvancedHealthCheckService>();
+        services.AddHostedService<PerformanceProfilingService>();
 
         return services;
     }
