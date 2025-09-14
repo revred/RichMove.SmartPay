@@ -26,6 +26,13 @@ This repository powers the SmartPay API and related admin/merchant UI.
 - **Verification Process**: `DOCS/VnV/VerificationAndValidation.md`
 - **Smoke Playbook**: `Smoke_Features.md`
 
+### MVP Guardrail
+- This repo tracks some advanced infrastructure (K8s/Prometheus/Scaling, Blockchain stubs). By default they're **OFF** via feature flags.
+- A **narrow allowlist** is **MVP-optional** when guardrails are on:
+  - `/metrics` bound privately + admin auth
+  - `/scaling/status` admin auth; no PII
+- Everything else stays parked under **WP8** until promoted via V&V.
+
 ## 🏗️ Architecture
 
 - **Clean Architecture** with clear separation of concerns

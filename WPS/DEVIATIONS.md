@@ -27,3 +27,16 @@
 ### D6 — RLS delete policy
 - **Observation:** Delete intentionally restricted (service-role only).
 - **Action:** Documented in RLS guide; acceptable for now.
+
+## 2025-09-15 (Pragmatic tolerance)
+
+### D7 — MVP allowlist for infra
+- **Observation:** Some infra is already implemented and can be useful with tiny cost.
+- **Decision:** Permit `/metrics` and `/scaling/status` in MVP **only with guardrails** (private binding + admin auth + no PII). Everything else remains parked.
+
+### D8 — Cost levers
+- **Single instance** App Service/ACA, **no persistent Prometheus** in RED, **short scrape interval**, **exporters off** for OTel. Output compression on.
+
+### D9 — Guardrail testing requirement
+- **Observation:** MVP-optional features need rigorous validation to prevent scope creep.
+- **Decision:** All WP8 features require 404/401/200 test pattern + 7-day production validation before Core promotion.

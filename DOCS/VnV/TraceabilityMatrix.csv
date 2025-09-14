@@ -15,3 +15,9 @@ E5.Outbox,Retry outbox,WP05,"OBS-WP5-Outbox",UH,Logs with backoff attempts
 E5.RLS,DB RLS tenant isolation,WP05,"INTEG-WP5-RLS",UH,DB script + Supabase behavior
 E7.F1,Blazor SSR Admin UI,WP06,"PLAN-E7-UI",UF,WP06 docs
 E7.F2,OpenAPI-first SDKs,WP06,"PLAN-E7-SDK",UF,WP06 docs
+E8.F1,Prod Docker/K8s readiness,WP8,"PLAN-E8-Docker-K8s",UH,"Docs-only; MVP allowed"
+E8.F2,Prometheus metrics endpoint (guarded),WP8,"SMK-E8-Metrics-404;SMK-E8-Metrics-401;SMK-E8-Metrics-200",UH,"MVP-allowed with guardrails"
+E8.F3,Auto-scaling status endpoint (guarded),WP8,"SMK-E8-Scaling-404;SMK-E8-Scaling-401;SMK-E8-Scaling-200",UH,"MVP-allowed with guardrails"
+E8.F4,OpenTelemetry expansion,WP8,"PLAN-E8-OTel",UH,DOCS/OBSERVABILITY/OpenTelemetryPlan.md
+E8.F5,Non-FX domain stubs (Blockchain),WP8,"PLAN-E8-Blockchain",UH,"OTel plan mentions + commit refs"
+OPS.COST,Cost monitoring & alerts,WP8,"OPS-BUDGET-ALERTS;OPS-LOG-VOLUME;OPS-EGRESS",UH,"DOCS/Ops/CostMonitoring.md"

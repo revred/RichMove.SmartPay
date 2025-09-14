@@ -23,8 +23,18 @@
 | WP10 | Quality CI/CD & Testing | Scaffold | E6 | Advanced testing, dev tools | `WPS/WP10_Quality_CICD_and_Testing_V2.md#vv` |
 | WP11 | Regulatory & Licensing | Plan | E9 | Compliance framework, licensing | `WPS/WP11_Regulatory_and_Licensing_V2.md#vv` |
 | WP12 | Partner Integrations & GTM | Plan | E10 | Partner framework, hosting | `WPS/WP12_Partner_Integrations_and_GTM_V2.md#vv` |
+| **WP8** | **Advanced Infra & Deployment** | **MVP-optional (Guardrailed)** | E8 | K8s, Prometheus, Scaling endpoints | `WPS/WP8.md#vv` |
 
 > V&V hub: see `DOCS/VnV/VerificationAndValidation.md` and `DOCS/VnV/TraceabilityMatrix.csv`.
+
+## MVP Guardrail
+- Features in **WP8** are **OFF by default**. A **narrow allowlist** may be enabled in MVP **only with guardrails** (see `WPS/WP8.md`).
+- Business/product can opt-in case-by-case; V&V must include **guardrail tests** (disabled→404, unauth→401, enabled+auth→200).
+
+### Allowed-in-MVP (when guarded)
+- **Metrics endpoint** (internal/private binding + admin auth).
+- **Scaling status** (admin auth only, no PII/no tenant details).
+- **K8s readiness** (docs-only; zero runtime cost).
 
 ## Naming & IDs
 - **Features:** `E#`, `E#.F#`, `E#.F#.N#`, requirements `R#` at any level.

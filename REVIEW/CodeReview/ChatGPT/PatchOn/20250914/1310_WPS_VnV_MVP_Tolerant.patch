@@ -1,0 +1,233 @@
+From 5f6e7d8c9b0a1e2d3c4b5a6 Mon Sep 15 13:10:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 13:10:00 +0100
+Subject: [WPS/V&V] Pragmatic MVP tolerance: keep low-cost advanced pieces with
+ guardrails; tighten flags, tests, and docs (docs-only)
+X-Patch-Name: 1310_WPS_VnV_MVP_Tolerant.patch
+
+# Summary
+# This is a documentation-only refinement of the previous reconciliation pass.
+# Instead of quarantining all advanced infra, we explicitly allow a **small,
+# low-cost subset** into MVP when **guardrails** are on. Everything else stays
+# parked. No runtime code changes here—just V&V, flags, and docs to guide safe use.
+#
+# Key ideas:
+# - "MVP-optional (Guardrailed)" status for selected infra.
+# - Clear cost/attack-surface guardrails + default-off flags.
+# - V&V tests for guardrails (404/401 when disabled/unauth).
+#
+---
+diff --git a/WPS/INDEX.md b/WPS/INDEX.md
+index 4f8e1a0..b2c7d4e 100644
+--- a/WPS/INDEX.md
++++ b/WPS/INDEX.md
+@@ -11,7 +11,7 @@
+ ## Table
+ | WP | Title | Status | Primary Epics | Key Artifacts | V&V Tables |
+ |---:|-------|--------|---------------|---------------|------------|
+ | WP1 | Platform Foundation | Feature/Hardening | E1 | `README.md`, API shell, health | `WPS/WP1.md#vv` |
+ | WP2 | Foreign Exchange Core | Feature | E2 | FX quote endpoint, storage | `WPS/WP2.md#vv` |
+ | WP3 | Payment Providers | Plan | E3 | Orchestration plan | `WPS/WP3.md#vv` |
+ | WP4 | Advanced (Realtime/Tenancy/Analytics) | Feature | E4 | Hub, tenancy, metrics | `WPS/WP4.md#vv` |
+ | WP4.1 | Triggers & Perf Smoke | Feature | E4 | Quote trigger, k6 | `WPS/WP4.1.md#vv` |
+-| WP5 | Event Bridge & RLS | Feature | E4/E5 | Webhooks, RLS templates | `WPS/WP5.md#vv` |
+-| WP6 | UI & SDK | Plan | E7/E8 | Blazor SSR plan, SDK plan | `WPS/WP6.md#vv` |
+-| **WP8** | **Advanced Infra & Deployment** | **Quarantined** | E8 | K8s, Prometheus, Scaling endpoints | `WPS/WP8.md#vv` |
++| WP5 | Event Bridge & RLS | Feature | E4/E5 | Webhooks, RLS templates | `WPS/WP5.md#vv` |
++| WP6 | UI & SDK | Plan | E7/E8 | Blazor SSR plan, SDK plan | `WPS/WP6.md#vv` |
++| **WP8** | **Advanced Infra & Deployment** | **MVP-optional (Guardrailed)** | E8 | K8s, Prometheus, Scaling endpoints | `WPS/WP8.md#vv` |
+@@ -24,6 +24,12 @@
+ ## MVP Guardrail
+-- Features in **WP8** are **OFF by default** and **not part of MVP acceptance**. Promotion requires business sign-off + passing V&V.
++- Features in **WP8** are **OFF by default**. A **narrow allowlist** may be enabled in MVP **only with guardrails** (see `WPS/WP8.md`).
++- Business/product can opt-in case-by-case; V&V must include **guardrail tests** (disabled→404, unauth→401, enabled+auth→200).
++
++### Allowed-in-MVP (when guarded)
++- **Metrics endpoint** (internal/private binding + admin auth).
++- **Scaling status** (admin auth only, no PII/no tenant details).
++- **K8s readiness** (docs-only; zero runtime cost).
+ 
+diff --git a/WPS/WP8.md b/WPS/WP8.md
+index c7f3d21..e5a4f39 100644
+--- a/WPS/WP8.md
++++ b/WPS/WP8.md
+@@ -1,26 +1,34 @@
+-# WP8 — Advanced Infra & Deployment (Quarantined)
++# WP8 — Advanced Infra & Deployment (MVP-optional, Guardrailed)
+ 
+-> Purpose: Document—and park—advanced production infrastructure features introduced in recent commits so they don’t dilute the MVP focus or costs.
++> Purpose: Keep valuable infra pieces **available** but **safe & cheap**. A small allowlist is permitted in MVP when guardrails are on. Everything else remains parked until promoted.
+ 
+ ## Scope
+ - **Kubernetes-readiness & container hardening** (Dockerfile.production, .dockerignore, health probes).
+-- **Observability endpoints** (`/metrics`, Prometheus collectors).
+-- **Scaling status API** (`/scaling/status`), auto-scaling heuristics.
+-- **OpenTelemetry expansion** (namespaces, conventions).
++- **Observability endpoints** (`/metrics`, Prometheus collectors) — *allowlisted* in MVP with guardrails.
++- **Scaling status API** (`/scaling/status`) — *allowlisted* in MVP with guardrails.
++- **OpenTelemetry expansion** (namespaces, conventions) — minimal, export disabled by default.
+ - **Non-FX domains (e.g., Blockchain ops)** — tracked but out of MVP.
+ 
+ ## Out-of-scope for MVP
+ - Enabling these endpoints/collectors in RED environment.
+ - Any non-essential infra cost in Azure (extra pods, persistent scrape targets).
+ 
+ ## Deliverables (Docs)
+ - Architecture notes (`DOCS/Architecture/FeatureFlags.md`): how to gate these.
+ - Config specimens with all features **disabled by default**.
+ 
+-## Risks if left enabled
++## Risks if left unguarded
+ - **Cost creep** (extra containers, scrapes, storage).
+ - **Attack surface** (new unauth endpoints).
+ - **Scope drift** away from FX-first MVP.
+ 
++## MVP Allowlist (with guardrails)
++| Feature ID | Name | Allowed Condition | Guardrails | Cost Notes |
++|-----------:|------|-------------------|------------|-----------|
++| E8.F2 | Prometheus `/metrics` | **Monitoring.Enabled=true, Prometheus=true** | Bind to **loopback/private**; **admin auth**; **1m scrape**; no remote writes | No extra infra; tiny CPU if polled locally |
++| E8.F3 | `/scaling/status` | **Scaling.Enabled=true, ExposeStatusEndpoint=true** | **Admin auth**; no PII/tenant data; redact counts | Zero if rarely hit |
++| E8.F1 | Docker/K8s readiness | Always allowed (docs) | N/A | Docs-only; zero runtime |
++| E8.F4 | OpenTelemetry minimal | **Monitoring.OpenTelemetry=true** | **Exporters disabled** by default; sampling low if turned on | Near-zero until exporters are configured |
++| E8.F5 | Non-FX domains | Not allowed in MVP | Parked until WP raised | N/A |
++
+ ## V&V {#vv}
+ ### Feature → Test mapping
+ | Feature ID | Name | Test IDs | Evidence / Location |
+@@ -30,12 +38,21 @@
+ | E8.F4 | OpenTelemetry expansion | PLAN-E8-OTel | DOCS/OBSERVABILITY/OpenTelemetryPlan.md |
+ | E8.F5 | Non-FX domain stubs (Blockchain) | PLAN-E8-Blockchain | OTel plan mentions + commit refs |
+ 
+-### Acceptance (for promotion later)
+-- AuthN/AuthZ enforced; cost model approved; p95 latencies unaffected; endpoints hidden in RED env.
++### Acceptance (MVP allowlist)
++- **Disabled** → endpoints return **404**; **Unauth** → **401**; **Enabled+Auth** → **200**.
++- Bindings: metrics internal/private; scaling status behind admin auth and without PII.
++- p95 latencies unaffected at low RPS; no persistent scrape/storage in RED.
+ 
+ ### Rollback
+ - Keep flags **false**; remove deployment manifests from default pipelines.
+ 
+ ## Notes
+ - Promotion to Core WPs requires: updated TraceabilityMatrix rows → smoke tests → cost check.
+ 
+diff --git a/DOCS/Architecture/FeatureFlags.md b/DOCS/Architecture/FeatureFlags.md
+index f1c2d3e..ab7d5c1 100644
+--- a/DOCS/Architecture/FeatureFlags.md
++++ b/DOCS/Architecture/FeatureFlags.md
+@@ -1,6 +1,6 @@
+ # Feature Flags — Policy & Defaults
+ 
+-Purpose: keep MVP lean and costs low by gating optional infrastructure/features.
++Purpose: keep MVP lean and costs low by gating optional infrastructure/features. Some guardrailed items may be enabled in MVP.
+ 
+ ## Principles
+ - **Default OFF** unless the feature directly benefits MVP users.
+@@ -11,7 +11,7 @@
+ ## Suggested flags (names illustrative)
+ ```jsonc
+ {
+   "Features": {
+     "Monitoring": {
+-      "Enabled": false,
+-      "Prometheus": false,
+-      "OpenTelemetry": false
++      "Enabled": false,        // RED: false, GREEN: true (selective)
++      "Prometheus": false,     // RED: false, GREEN: true (private bind + auth)
++      "OpenTelemetry": false   // RED: false, GREEN: true (exporters usually off)
+     },
+     "Scaling": {
+       "Enabled": false,
+@@ -24,10 +24,26 @@
+   }
+ }
+ ```
+ 
++### Example bindings (ASP.NET)
++- Metrics route bound to `http://127.0.0.1:XXXX/metrics` or private VNet address.
++- Admin auth enforced via policy `RequireRole('Admin')` on both endpoints.
++
+ ## Environments
+ - **RED (dev/free tier):** all OFF, except minimal logs & health.
+ - **GREEN (prod/paid):** selectively enable with cost review.
+ 
+ ## V&V
+ - Promotion of any flag to `true` requires: updated `TraceabilityMatrix.csv`, WP8 acceptance, and smoke coverage.
++
++### Guardrail smoke (conceptual)
++- SMK-E8-Metrics-404: flags off → `/metrics` returns 404.
++- SMK-E8-Metrics-401: monitoring on but not authed → 401.
++- SMK-E8-Metrics-200: monitoring on + admin → 200.
++- SMK-E8-Scaling-404/401/200: analogous for `/scaling/status`.
+diff --git a/DOCS/VnV/TraceabilityMatrix.csv b/DOCS/VnV/TraceabilityMatrix.csv
+index e4f5a6b..c8d9e0f 100644
+--- a/DOCS/VnV/TraceabilityMatrix.csv
++++ b/DOCS/VnV/TraceabilityMatrix.csv
+@@ -13,6 +13,6 @@
+ E5.Outbox,Retry outbox,WP5,"OBS-WP5-Outbox",UH,Logs with backoff attempts
+ E5.RLS,DB RLS tenant isolation,WP5,"INTEG-WP5-RLS",UH,DB script + Supabase behavior
+ E7.F1,Blazor SSR Admin UI,WP6,"PLAN-E7-UI",UF,WP6 docs
+ E7.F2,OpenAPI-first SDKs,WP6,"PLAN-E7-SDK",UF,WP6 docs
+-E8.F1,Prod Docker/K8s readiness,WP8,"PLAN-E8-Docker-K8s",UH,"ZEN/Dockerfile.production, ZEN/.dockerignore"
+-E8.F2,Prometheus metrics endpoint,WP8,"PLAN-E8-MetricsEndpoint",UH,"Controllers/MetricsController (docs)"
+-E8.F3,Auto-scaling status endpoint,WP8,"PLAN-E8-ScalingAPI",UH,"Controllers/ScalingController (docs)"
++E8.F1,Prod Docker/K8s readiness,WP8,"PLAN-E8-Docker-K8s",UH,"Docs-only; MVP allowed"
++E8.F2,Prometheus metrics endpoint (guarded),WP8,"SMK-E8-Metrics-404;SMK-E8-Metrics-401;SMK-E8-Metrics-200",UH,"MVP-allowed with guardrails"
++E8.F3,Auto-scaling status endpoint (guarded),WP8,"SMK-E8-Scaling-404;SMK-E8-Scaling-401;SMK-E8-Scaling-200",UH,"MVP-allowed with guardrails"
+ E8.F4,OpenTelemetry expansion,WP8,"PLAN-E8-OTel",UH,DOCS/OBSERVABILITY/OpenTelemetryPlan.md
+ E8.F5,Non-FX domain stubs (Blockchain),WP8,"PLAN-E8-Blockchain",UH,"OTel plan mentions + commit refs"
+diff --git a/DOCS/VnV/TestCatalogue.md b/DOCS/VnV/TestCatalogue.md
+index c2d3e4f..d7e8c2a 100644
+--- a/DOCS/VnV/TestCatalogue.md
++++ b/DOCS/VnV/TestCatalogue.md
+@@ -27,6 +27,12 @@
+ - **INTEG-WP5-RLS** — DB behavior with/without service role
+ 
+ ## Performance (PERF-*)
+ - **PERF-E4-K6-Quote** — `ANALYSIS/PERF/scenarios/fx-quote-smoke.js`
+ 
+ ## Observability (OBS-*)
+ - **OBS-E2-Metrics** — logs/metrics show pricing tick
+ - **OBS-WP5-Outbox** — logs show retries/backoff
++
++## Guardrail Smoke (E8)
++- **SMK-E8-Metrics-404/401/200** — verify flags & auth on `/metrics`
++- **SMK-E8-Scaling-404/401/200** — verify flags & auth on `/scaling/status`
++
+diff --git a/WPS/DEVIATIONS.md b/WPS/DEVIATIONS.md
+index 9a0b1c2..b8c0d2e 100644
+--- a/WPS/DEVIATIONS.md
++++ b/WPS/DEVIATIONS.md
+@@ -27,3 +27,13 @@
+ - **Observation:** Controllers introduced; auth stance unclear.
+ - **Decision:** MUST be behind `Monitoring.Enabled=false` by default and require admin auth when enabled (follow-up PR to add gating).
+ 
++## 2025-09-15 (Pragmatic tolerance)
++
++### D10 — MVP allowlist for infra
++- **Observation:** Some infra is already implemented and can be useful with tiny cost.
++- **Decision:** Permit `/metrics` and `/scaling/status` in MVP **only with guardrails** (private binding + admin auth + no PII). Everything else remains parked.
++
++### D11 — Cost levers
++- **Single instance** App Service/ACA, **no persistent Prometheus** in RED, **short scrape interval**, **exporters off** for OTel. Output compression on.
++
+diff --git a/README.md b/README.md
+index 9012abc..ab13ce0 100644
+--- a/README.md
++++ b/README.md
+@@ -12,6 +12,14 @@
+ - **SDK Consumption**: `DOCS/API/SDK-Consumption.md`
+ - **Blazor Perf Cookbook**: `DOCS/Perf/Blazor.Fast.md`
+ 
+ ### MVP Guardrail
+-- This repo tracks some **advanced infrastructure** ideas (K8s/Prometheus/Scaling, Blockchain stubs). They’re **not** part of the MVP and are documented under **WP8 (Quarantined)**, default **OFF** via feature flags. Promote only with business sign‑off and passing V&V.
++- This repo tracks some advanced infrastructure (K8s/Prometheus/Scaling, Blockchain stubs). By default they’re **OFF** via feature flags.
++- A **narrow allowlist** is **MVP-optional** when guardrails are on:
++  - `/metrics` bound privately + admin auth
++  - `/scaling/status` admin auth; no PII
++- Everything else stays parked under **WP8** until promoted via V&V.
+ 
+ ## WP5 (Event Bridge & RLS)
+ - **Webhooks (Outbound)**: HMAC-signed delivery with retrying outbox (opt-in via `appsettings.WP5.json`).
+ - **Composite Notifications**: SignalR (WP4) + Webhooks mirror.
+ - **RLS Templates**: `DB/SUPABASE/WP5_RLS.sql` + `DOCS/Data/RLS_Supabase.md` for tenant isolation.

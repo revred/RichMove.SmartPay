@@ -27,3 +27,12 @@ Map of **Test IDs** to **files/commands** used across PR and nightly matrices.
 ## Observability (OBS-*)
 - **OBS-E2-Metrics** — logs/metrics show pricing tick
 - **OBS-WP5-Outbox** — logs show retries/backoff
+
+## Guardrail Smoke (E8)
+- **SMK-E8-Metrics-404/401/200** — verify flags & auth on `/metrics`
+- **SMK-E8-Scaling-404/401/200** — verify flags & auth on `/scaling/status`
+
+## Ops/Cost (OPS-*)
+- **OPS-BUDGET-ALERTS** — Budget + alert rules configured on the RG/app
+- **OPS-LOG-VOLUME** — Daily log volume under target in RED; alert if exceeded
+- **OPS-EGRESS** — Egress/day under thresholds (alerts wired)
