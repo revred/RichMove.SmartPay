@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RichMove.SmartPay.Core.Observability;
+using RichMove.SmartPay.Core.Compliance;
 
 namespace RichMove.SmartPay.Api.Security;
 
@@ -822,14 +823,6 @@ public enum AuditSeverity
     Critical
 }
 
-public enum ComplianceFramework
-{
-    GDPR,
-    PCIDSS,
-    SOX,
-    HIPAA,
-    ISO27001
-}
 
 public enum RiskLevel
 {
