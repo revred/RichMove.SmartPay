@@ -8,6 +8,11 @@ using RichMove.SmartPay.Api.Handlers;
 using RichMove.SmartPay.Api.Health;
 using RichMove.SmartPay.Api.Idempotency;
 using RichMove.SmartPay.Api.Middleware;
+using RichMove.SmartPay.Api.Monitoring;
+using RichMove.SmartPay.Api.Performance;
+using RichMove.SmartPay.Api.Resilience;
+using RichMove.SmartPay.Api.Security;
+using RichMove.SmartPay.Api.Services;
 using RichMove.SmartPay.Core.Blockchain;
 using RichMove.SmartPay.Core.Time;
 using RichMove.SmartPay.Infrastructure.Blockchain;
@@ -22,6 +27,11 @@ public static partial class SmartPayHardeningExtensions
 
         services.Configure<FeatureFlags>(config.GetSection("Features"));
         services.Configure<IdempotencyOptions>(config.GetSection("Idempotency"));
+        services.Configure<JwtTokenOptions>(config.GetSection("JwtToken"));
+        services.Configure<RateLimitOptions>(config.GetSection("RateLimit"));
+        services.Configure<CircuitBreakerOptions>(config.GetSection("CircuitBreaker"));
+        services.Configure<MemoryPoolOptions>(config.GetSection("MemoryPool"));
+        services.Configure<CleanupOptions>(config.GetSection("Cleanup"));
 
         // Clock abstraction
         services.AddSingleton<IClock, SystemClock>();
@@ -36,6 +46,26 @@ public static partial class SmartPayHardeningExtensions
         services.AddHttpContextAccessor();
         services.AddTransient<CorrelationIdHandler>();
 
+        // Security services
+        services.AddSingleton<WebhookSignature>();
+        services.AddSingleton<JwtTokenRotator>();
+        services.AddSingleton<ClientRateLimiter>();
+        services.AddSingleton<AuditLogger>();
+
+        // Resilience services
+        services.AddSingleton<CircuitBreakerService>();
+
+        // Observability services
+        services.AddSingleton<ColdStartTracker>();
+        services.AddSingleton<RateLimitCounters>();
+
+        // Performance services
+        services.AddSingleton<MemoryPoolManager>();
+        services.AddTransient(typeof(AsyncDataStreamer<>));
+
+        // Background services
+        services.AddHostedService<CleanupBackgroundService>();
+
         return services;
     }
 
@@ -48,6 +78,9 @@ public static partial class SmartPayHardeningExtensions
 
         // ProblemDetails for all errors + not-implemented normalization
         app.UseMiddleware<UnhandledExceptionMiddleware>();
+
+        // Cold-start tracking (early in pipeline)
+        app.UseMiddleware<ColdStartMiddleware>();
 
         // Correlation ID
         app.UseMiddleware<CorrelationIdMiddleware>();

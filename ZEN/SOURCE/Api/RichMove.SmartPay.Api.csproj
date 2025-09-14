@@ -12,6 +12,8 @@
     <PackageReference Include="FastEndpoints.Swagger" />
     <!-- Needed for typed access to NpgsqlDataSource in Program.cs -->
     <PackageReference Include="Npgsql" />
+    <PackageReference Include="Polly.Extensions.Http" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
 
   <ItemGroup>

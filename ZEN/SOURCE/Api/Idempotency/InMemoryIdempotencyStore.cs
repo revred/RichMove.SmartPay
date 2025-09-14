@@ -57,9 +57,41 @@ public sealed partial class InMemoryIdempotencyStore : IIdempotencyStore
         }
     }
 
+    /// <summary>
+    /// Clean up expired entries from the store
+    /// </summary>
+    public Task<int> CleanupExpiredAsync(TimeSpan retentionPeriod, CancellationToken cancellationToken = default)
+    {
+        var cutoffTime = _clock.UtcNow - retentionPeriod;
+        var expiredKeys = new List<string>();
+
+        foreach (var kvp in _keys)
+        {
+            if (kvp.Value < cutoffTime)
+            {
+                expiredKeys.Add(kvp.Key);
+            }
+        }
+
+        var cleanedCount = 0;
+        foreach (var key in expiredKeys)
+        {
+            if (_keys.TryRemove(key, out _))
+            {
+                cleanedCount++;
+            }
+        }
+
+        Log.PeriodicCleanup(_logger, cleanedCount, retentionPeriod.TotalHours);
+        return Task.FromResult(cleanedCount);
+    }
+
     private static partial class Log
     {
         [LoggerMessage(EventId = 2001, Level = LogLevel.Information, Message = "Cold-start cleanup: purged {ExpiredCount} expired idempotency keys")]
         public static partial void ColdStartCleanup(ILogger logger, int expiredCount);
+
+        [LoggerMessage(EventId = 2002, Level = LogLevel.Information, Message = "Periodic cleanup: purged {ExpiredCount} keys older than {RetentionHours:F1} hours")]
+        public static partial void PeriodicCleanup(ILogger logger, int expiredCount, double retentionHours);
     }
 }
