@@ -1,0 +1,80 @@
+# Gitleaks configuration for RichMove.SmartPay
+# Prevents accidental secret commits while allowing test fixtures
+
+title = "RichMove SmartPay Secret Detection"
+
+[extend]
+useDefault = true
+
+[[rules]]
+description = "Private Key Detection"
+id = "private-key"
+regex = '''-----BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY-----'''
+tags = ["key", "private"]
+
+[[rules]]
+description = "API Key Detection"
+id = "api-key-generic"
+regex = '''(?i)(api[_-]?key|apikey|secret[_-]?key|secretkey)(["\s:=]){1,3}[a-zA-Z0-9]{16,}'''
+tags = ["api", "key"]
+
+[[rules]]
+description = "Connection String Detection"
+id = "connection-string"
+regex = '''(?i)(connectionstring|conn[_-]?str)(["\s:=]){1,3}[^"'\s;]{10,}'''
+tags = ["connection", "database"]
+
+[[rules]]
+description = "JWT Token Detection"
+id = "jwt-token"
+regex = '''eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*'''
+tags = ["jwt", "token"]
+
+# Test fixture allowlist
+[[allowlist]]
+description = "Test fixtures and examples"
+paths = [
+    '''(?i).*test.*''',
+    '''(?i).*fixture.*''',
+    '''(?i).*example.*''',
+    '''(?i).*sample.*''',
+    '''.*\.test\..*''',
+    '''.*Test.*''',
+    '''.*/TESTS/.*''',
+    '''.*/tests/.*''',
+    '''.*/testdata/.*''',
+    '''.*/mocks/.*''',
+    '''DOCS/.*''',
+    '''README\.md''',
+    '''.*\.md'''
+]
+
+[[allowlist]]
+description = "Known safe values"
+regexes = [
+    '''test[_-]?key[_-]?123''',
+    '''example[_-]?secret''',
+    '''demo[_-]?token''',
+    '''placeholder[_-]?value''',
+    '''your[_-]?(api[_-]?key|secret|token)''',
+    '''<(API[_-]?KEY|SECRET|TOKEN)>''',
+    '''\$\{[A-Z_]+\}'''  # Environment variable placeholders
+]
+
+[[allowlist]]
+description = "SmartPay test values"
+regexes = [
+    '''sk_test_[a-zA-Z0-9]{24}''',  # Test API keys
+    '''test_wallet_[a-f0-9]{8}''',  # Test wallet addresses
+    '''corr_test_[a-f0-9]{16}'''    # Test correlation IDs
+]
+
+[allowlist.commits]
+# Allow specific commits with known test data
+stopwords = [
+    "test",
+    "fixture",
+    "example",
+    "demo",
+    "placeholder"
+]
