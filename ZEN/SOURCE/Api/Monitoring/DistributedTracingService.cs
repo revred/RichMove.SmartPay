@@ -106,8 +106,8 @@ public sealed partial class DistributedTracingService : IHostedService, IDisposa
 
         _activeTraces[traceId] = traceContext;
 
-        var span = StartSpan(traceId, null, operationName, kind);
-        traceContext.RootSpanId = span.SpanId;
+        var rootSpanId = StartSpan(traceId, null, operationName, kind);
+        traceContext.RootSpanId = rootSpanId;
 
         _traceCount.Add(1,
             new KeyValuePair<string, object?>("service", _options.ServiceName),

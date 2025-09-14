@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Net;
+using System.Security;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -45,7 +47,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
 
     public async Task<SecurityCheckResult> ValidateRequestAsync(HttpContext context)
     {
-        using var activity = Activity.StartActivity("ApiSecurityValidation");
+        using var activity = Activity.Current?.Source?.StartActivity("ApiSecurityValidation");
         var stopwatch = Stopwatch.StartNew();
 
         try
@@ -193,7 +195,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         return result;
     }
 
-    private async Task<SecurityCheckResult> CheckRateLimitAsync(HttpContext context)
+    private Task<SecurityCheckResult> CheckRateLimitAsync(HttpContext context)
     {
         var result = new SecurityCheckResult { IsAllowed = true };
         var clientIp = GetClientIpAddress(context);
@@ -203,12 +205,12 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         var now = DateTime.UtcNow;
 
         var rateLimit = _rateLimitCache.AddOrUpdate(key,
-            new RateLimitState { RequestCount = 1, WindowStart = now },
+            new RateLimitState(1, now),
             (_, existing) =>
             {
                 if (now - existing.WindowStart > _options.RateLimitWindow)
                 {
-                    return new RateLimitState { RequestCount = 1, WindowStart = now };
+                    return new RateLimitState(1, now);
                 }
 
                 return existing with { RequestCount = existing.RequestCount + 1 };
@@ -220,7 +222,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
             result.Reasons.Add($"Rate limit exceeded: {rateLimit.RequestCount} requests in window");
         }
 
-        return result;
+        return Task.FromResult(result);
     }
 
     private async Task<SecurityCheckResult> ValidateApiKeyAsync(HttpContext context)

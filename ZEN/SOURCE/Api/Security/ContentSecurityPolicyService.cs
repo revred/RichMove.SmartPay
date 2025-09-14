@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Security.Cryptography;
 using System.Text;
@@ -57,7 +58,7 @@ public sealed class ContentSecurityPolicyService : IHostedService, IDisposable
 
     public string GeneratePolicy(HttpContext context, CspMode mode = CspMode.Enforce)
     {
-        using var activity = Activity.StartActivity("GenerateCSPPolicy");
+        using var activity = Activity.Current?.Source?.StartActivity("GenerateCSPPolicy");
         var stopwatch = Stopwatch.StartNew();
 
         try

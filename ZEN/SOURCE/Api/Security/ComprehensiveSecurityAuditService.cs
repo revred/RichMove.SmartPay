@@ -730,6 +730,11 @@ public class SecurityAuditRule
     public bool IsEnabled { get; set; } = true;
     public bool AutoEscalate { get; set; } = false;
     public Func<ComprehensiveAuditEvent, Task<bool>> MatchCondition { get; set; } = _ => Task.FromResult(false);
+
+    public async Task<bool> MatchesAsync(ComprehensiveAuditEvent auditEvent)
+    {
+        return await MatchCondition(auditEvent);
+    }
 }
 
 public class SecurityAuditReport

@@ -32,7 +32,6 @@ public static partial class SmartPayHardeningExtensions
         services.Configure<FeatureFlags>(config.GetSection("Features"));
         services.Configure<IdempotencyOptions>(config.GetSection("Idempotency"));
         services.Configure<JwtTokenOptions>(config.GetSection("JwtToken"));
-        services.Configure<RateLimitOptions>(config.GetSection("RateLimit"));
         services.Configure<CircuitBreakerOptions>(config.GetSection("CircuitBreaker"));
         services.Configure<MemoryPoolOptions>(config.GetSection("MemoryPool"));
         services.Configure<CleanupOptions>(config.GetSection("Cleanup"));
@@ -70,7 +69,6 @@ public static partial class SmartPayHardeningExtensions
         // Security services
         services.AddSingleton<WebhookSignature>();
         services.AddSingleton<JwtTokenRotator>();
-        services.AddSingleton<ClientRateLimiter>();
         services.AddSingleton<AuditLogger>();
 
         // Validation services (MVP-essential)

@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Security;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -18,7 +20,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
     private readonly Counter<long> _sanitizationCount;
     private readonly Histogram<double> _sanitizationDuration;
     private readonly Counter<long> _threatDetectionCount;
-    private readonly ConcurrentDictionary<string, DateTime> _ipThrottleCache;
+    private readonly ConcurrentDictionary<string, (int Count, DateTime WindowStart)> _ipThrottleCache;
 
     private static readonly Dictionary<string, Regex> CompiledPatterns = new()
     {
@@ -42,7 +44,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
         _logger = logger;
         _options = options.Value;
         _customRules = new ConcurrentDictionary<string, SanitizationRule>();
-        _ipThrottleCache = new ConcurrentDictionary<string, DateTime>();
+        _ipThrottleCache = new ConcurrentDictionary<string, (int Count, DateTime WindowStart)>();
 
         var meter = meterFactory.Create("RichMove.SmartPay.InputSanitization");
         _sanitizationCount = meter.CreateCounter<long>("richmove_smartpay_sanitization_total");
@@ -58,7 +60,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
 
     public async Task<SanitizationResult> SanitizeAsync(string input, SanitizationContext context)
     {
-        using var activity = Activity.StartActivity("InputSanitization");
+        using var activity = Activity.Current?.Source?.StartActivity("InputSanitization");
         var stopwatch = Stopwatch.StartNew();
 
         try
@@ -278,13 +280,22 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
     {
         if (string.IsNullOrEmpty(context.ClientIP)) return;
 
-        var key = $"{context.ClientIP}:{DateTime.UtcNow:yyyy-MM-dd-HH-mm}";
-        var requestCount = _ipThrottleCache.AddOrUpdate(key, 1, (_, count) => count + 1);
+        var key = context.ClientIP;
+        var now = DateTime.UtcNow;
+        var entry = _ipThrottleCache.AddOrUpdate(key,
+            (1, now),
+            (_, existing) =>
+            {
+                // Reset window if more than 1 minute old
+                if (now - existing.WindowStart > TimeSpan.FromMinutes(1))
+                    return (1, now);
+                return (existing.Count + 1, existing.WindowStart);
+            });
 
-        if (requestCount > _options.MaxRequestsPerMinute)
+        if (entry.Count > _options.MaxRequestsPerMinute)
         {
             _logger.LogWarning("Rate limit exceeded for IP {ClientIP}: {RequestCount} requests",
-                context.ClientIP, requestCount);
+                context.ClientIP, entry.Count);
 
             throw new SecurityException($"Rate limit exceeded for IP {context.ClientIP}");
         }
@@ -338,7 +349,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
     {
         var cutoff = DateTime.UtcNow.AddMinutes(-5);
         var expiredKeys = _ipThrottleCache
-            .Where(kvp => kvp.Value < cutoff)
+            .Where(kvp => kvp.Value.WindowStart < cutoff)
             .Select(kvp => kvp.Key)
             .ToList();
 
@@ -440,7 +451,7 @@ public class ValidationContext
 public class SecurityThreat
 {
     public string Type { get; set; } = "";
-    public InputThreatSeverity Severity { get; set; }
+    public ThreatSeverity Severity { get; set; }
     public DateTime DetectedAt { get; set; }
     public string Context { get; set; } = "";
     public string Pattern { get; set; } = "";
@@ -452,14 +463,14 @@ public class SanitizationRule
     public string Name { get; set; } = "";
     public string Pattern { get; set; } = "";
     public bool IsEnabled { get; set; } = true;
-    public InputThreatSeverity Severity { get; set; } = InputThreatSeverity.Medium;
+    public ThreatSeverity Severity { get; set; } = ThreatSeverity.Medium;
     public string Description { get; set; } = "";
     private Regex? _compiledPattern;
 
-    public async Task<bool> MatchesAsync(string input, SanitizationContext context)
+    public Task<bool> MatchesAsync(string input, SanitizationContext context)
     {
         _compiledPattern ??= new Regex(Pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        return _compiledPattern.IsMatch(input);
+        return Task.FromResult(_compiledPattern.IsMatch(input));
     }
 }
 
@@ -474,10 +485,3 @@ public enum SanitizationType
     Validation
 }
 
-public enum InputThreatSeverity
-{
-    Low,
-    Medium,
-    High,
-    Critical
-}
