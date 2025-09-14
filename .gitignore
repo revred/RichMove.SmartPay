@@ -1,3 +1,9 @@
+# WP4 local settings (do not commit real values)
+ZEN/SOURCE/Api/appsettings.WP4.json
+ANALYSIS/PERF/results/
+ANALYSIS/PERF/**/*.tmp
+ANALYSIS/PERF/scenarios/**/*.out
+
 # === WP2: Secret management (red-first) ===
 # Ignore all real secrets; keep only samples
 /secrets/*

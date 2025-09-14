@@ -1,0 +1,456 @@
+From 7a2b6c4d1e9f0a3b4c5d6e7f Mon Sep 14 09:30:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Sun, 14 Sep 2025 09:30:00 +0100
+Subject: [WP4.1] Triggers: FX quote created -> notifications, hub smoke test,
+ tenant resolver tests, k6 scenario
+X-Work-Package: WP4.1
+X-Patch-Name: 0930_WP4.1_Triggers.patch
+
+# Overview
+# - Adds a **non-invasive trigger** that emits a real-time notification when
+#   POST /api/fx/quote succeeds. Implemented as middleware; no controller edits required.
+# - Adds **k6 smoke scenario** for /api/fx/quote under ANALYSIS/PERF/scenarios/.
+# - Adds **smoke test** for SignalR hub mapping & **unit tests** for tenant resolver.
+# - Refines WP4 hub mapping to use `app.MapHub<>()` (safer than UseEndpoints).
+#
+# Notification topic: "fx.quote.created"
+# Payload (best-effort parsed from response JSON): { quoteId?, fromCurrency?, toCurrency?, amount?, rate? }
+#
+---
+diff --git a/WPS/WP4.md b/WPS/WP4.md
+index 8b92c11..4f0e2d8 100644
+--- a/WPS/WP4.md
++++ b/WPS/WP4.md
+@@ -76,6 +76,26 @@ Add `appsettings.WP4.sample.json` then merge into your environment files.
+ 
+ ## 6) Tests (WP4.2+)
+ - Hub smoke tests to ensure mapping and group join.
+ - Tenant resolution unit tests (host/header).
+ - Metrics counters presence & increment tests.
+ 
++## 6.1) **WP4.1 Triggers**
++
++### FX Quote → Realtime
++- A middleware inspects successful responses from **POST** `/api/fx/quote`,
++  parses JSON, and publishes `fx.quote.created` to the tenant group.
++- No controller changes required. Config toggle:
++
++```json
++{ "WP4": { "Triggers": { "FxQuoteCreated": true } } }
++```
++
++### Tests
++- **NotificationsHub smoke test** checks that `/hubs/notifications/negotiate` is reachable.
++- **TenantResolver unit tests** validate Host/Header strategies.
++
++### Perf
++- `ANALYSIS/PERF/scenarios/fx-quote-smoke.js` — quick k6 smoke to validate baseline.
++
+diff --git a/ZEN/SOURCE/Api/Bootstrap/WP4AppConfig.cs b/ZEN/SOURCE/Api/Bootstrap/WP4AppConfig.cs
+index f2cb1c9..d1a2ab2 100644
+--- a/ZEN/SOURCE/Api/Bootstrap/WP4AppConfig.cs
++++ b/ZEN/SOURCE/Api/Bootstrap/WP4AppConfig.cs
+@@ -1,12 +1,13 @@
+ using Microsoft.AspNetCore.Builder;
+ using Microsoft.Extensions.Configuration;
+ using Microsoft.Extensions.DependencyInjection;
+ using SmartPay.Api.Analytics;
+ using SmartPay.Api.Middleware;
++using SmartPay.Api.Triggers;
+ 
+ namespace SmartPay.Api.Bootstrap;
+ 
+ public static class WP4AppConfig
+ {
+     public static IApplicationBuilder UseWp4Features(this IApplicationBuilder app, IConfiguration cfg)
+     {
+         var wp4 = new Wp4Options(cfg);
+ 
+         if (wp4.AnalyticsEnabled && wp4.RequestLogging)
+             app.UseMiddleware<RequestLoggingMiddleware>();
+ 
+         if (wp4.MultiTenancyEnabled)
+             app.UseMiddleware<TenantMiddleware>();
+ 
+-        if (wp4.NotificationsEnabled)
+-        {
+-            app.UseRouting();
+-            app.UseEndpoints(endpoints =>
+-            {
+-                endpoints.MapHub<SmartPay.Api.Notifications.NotificationsHub>("/hubs/notifications");
+-            });
+-        }
++        if (wp4.TriggersFxQuoteCreated)
++            app.UseMiddleware<FxQuoteTriggerMiddleware>();
++
++        // Map hub without extra UseRouting/UseEndpoints (safer with minimal hosting)
++        if (wp4.NotificationsEnabled)
++            app.MapHub<SmartPay.Api.Notifications.NotificationsHub>("/hubs/notifications");
+ 
+         return app;
+     }
+ 
+     public static IServiceCollection AddWp4Features(this IServiceCollection services, IConfiguration cfg)
+     {
+         var wp4 = new Wp4Options(cfg);
+ 
+         if (wp4.NotificationsEnabled)
+         {
+             services.AddSignalR();
+             SmartPay.Infrastructure.Notifications.NotificationsRegistration.Add(services, cfg);
+         }
+ 
+         if (wp4.MultiTenancyEnabled)
+             SmartPay.Infrastructure.MultiTenancy.MultiTenancyRegistration.Add(services, cfg);
+ 
+         return services;
+     }
+ }
+diff --git a/ZEN/SOURCE/Api/Bootstrap/WP4ServiceRegistration.cs b/ZEN/SOURCE/Api/Bootstrap/WP4ServiceRegistration.cs
+index 87c9ec1..8a7bd54 100644
+--- a/ZEN/SOURCE/Api/Bootstrap/WP4ServiceRegistration.cs
++++ b/ZEN/SOURCE/Api/Bootstrap/WP4ServiceRegistration.cs
+@@ -9,6 +9,7 @@ public sealed class Wp4Options
+ {
+     public bool NotificationsEnabled { get; init; }
+     public string NotificationsProvider { get; init; } = "InMemory";
+ 
+     public bool MultiTenancyEnabled { get; init; }
+     public string MultiTenancyStrategy { get; init; } = "Host"; // or "Header"
+     public string TenantHeader { get; init; } = "X-Tenant";
+ 
+     public bool AnalyticsEnabled { get; init; }
+     public bool RequestLogging { get; init; }
++    public bool TriggersFxQuoteCreated { get; init; }
+ 
+     public Wp4Options(IConfiguration cfg)
+     {
+         NotificationsEnabled = cfg.GetValue("WP4:Notifications:Enabled", true);
+         NotificationsProvider = cfg.GetValue("WP4:Notifications:Provider", "InMemory")!;
+ 
+         MultiTenancyEnabled = cfg.GetValue("WP4:MultiTenancy:Enabled", true);
+         MultiTenancyStrategy = cfg.GetValue("WP4:MultiTenancy:Strategy", "Host")!;
+         TenantHeader = cfg.GetValue("WP4:MultiTenancy:Header", "X-Tenant")!;
+ 
+         AnalyticsEnabled = cfg.GetValue("WP4:Analytics:Enabled", true);
+         RequestLogging = cfg.GetValue("WP4:Analytics:RequestLogging", true);
++        TriggersFxQuoteCreated = cfg.GetValue("WP4:Triggers:FxQuoteCreated", true);
+     }
+ }
+diff --git a/ZEN/SOURCE/Api/Notifications/NotificationsHub.cs b/ZEN/SOURCE/Api/Notifications/NotificationsHub.cs
+index c18e9a0..6a50f45 100644
+--- a/ZEN/SOURCE/Api/Notifications/NotificationsHub.cs
++++ b/ZEN/SOURCE/Api/Notifications/NotificationsHub.cs
+@@ -1,6 +1,7 @@
+ using Microsoft.AspNetCore.SignalR;
+ using SmartPay.Core.MultiTenancy;
++using System.Security.Claims;
+ 
+ namespace SmartPay.Api.Notifications;
+ 
+ public sealed class NotificationsHub : Hub
+ {
+diff --git a/ZEN/SOURCE/Api/Triggers/FxQuoteTriggerMiddleware.cs b/ZEN/SOURCE/Api/Triggers/FxQuoteTriggerMiddleware.cs
+new file mode 100644
+index 0000000..e5c4d13
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Triggers/FxQuoteTriggerMiddleware.cs
+@@ -0,0 +1,143 @@
++using System.Buffers;
++using System.Text;
++using System.Text.Json;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Logging;
++using SmartPay.Api.Notifications;
++using SmartPay.Core.MultiTenancy;
++
++namespace SmartPay.Api.Triggers;
++
++/// <summary>
++/// Captures successful responses from POST /api/fx/quote and publishes a realtime
++/// notification "fx.quote.created" to the tenant group with best-effort fields.
++/// Non-invasive: no controller changes required.
++/// </summary>
++public sealed class FxQuoteTriggerMiddleware(RequestDelegate next, INotificationService notifier, ILogger<FxQuoteTriggerMiddleware> logger)
++{
++    private const string TargetPath = "/api/fx/quote";
++
++    public async Task Invoke(HttpContext context)
++    {
++        var isFxQuotePost =
++            HttpMethods.IsPost(context.Request.Method) &&
++            context.Request.Path.Equals(TargetPath, StringComparison.OrdinalIgnoreCase);
++
++        if (!isFxQuotePost)
++        {
++            await next(context);
++            return;
++        }
++
++        // Swap response body with a buffer to inspect output JSON
++        var originalBody = context.Response.Body;
++        await using var buffer = new MemoryStream();
++        context.Response.Body = buffer;
++
++        try
++        {
++            await next(context);
++
++            buffer.Position = 0;
++            var status = context.Response.StatusCode;
++            if (status >= 200 && status < 300 && buffer.Length > 0)
++            {
++                using var doc = await JsonDocument.ParseAsync(buffer, cancellationToken: context.RequestAborted);
++                var root = doc.RootElement;
++
++                string? quoteId = TryGetString(root, "quoteId") ?? TryGetString(root, "id");
++                string? fromCcy = TryGetString(root, "fromCurrency") ?? TryGetString(root, "from");
++                string? toCcy   = TryGetString(root, "toCurrency")   ?? TryGetString(root, "to");
++                decimal? amount = TryGetDecimal(root, "amount");
++                decimal? rate   = TryGetDecimal(root, "rate");
++
++                var tenantId = TenantContext.Current.TenantId;
++                var payload = new
++                {
++                    quoteId,
++                    fromCurrency = fromCcy,
++                    toCurrency   = toCcy,
++                    amount,
++                    rate,
++                    timestampUtc = DateTime.UtcNow
++                };
++
++                await notifier.PublishAsync(tenantId, "fx.quote.created", payload, context.RequestAborted);
++                logger.LogInformation("Emitted fx.quote.created for tenant {Tenant} (quoteId={QuoteId}, {From}->{To}, amount={Amount}, rate={Rate})",
++                    tenantId, quoteId, fromCcy, toCcy, amount, rate);
++
++                // Rewind to copy response out to client
++                buffer.Position = 0;
++            }
++        }
++        catch (Exception ex) when (!context.RequestAborted.IsCancellationRequested)
++        {
++            logger.LogError(ex, "FxQuoteTriggerMiddleware failed to publish notification.");
++            buffer.Position = 0;
++        }
++        finally
++        {
++            // Copy buffered response to the real body
++            await buffer.CopyToAsync(originalBody, context.RequestAborted);
++            context.Response.Body = originalBody;
++        }
++    }
++
++    private static string? TryGetString(JsonElement root, string prop) =>
++        root.TryGetProperty(prop, out var e) && e.ValueKind == JsonValueKind.String ? e.GetString() : null;
++
++    private static decimal? TryGetDecimal(JsonElement root, string prop)
++    {
++        if (!root.TryGetProperty(prop, out var e)) return null;
++        return e.ValueKind switch
++        {
++            JsonValueKind.Number when e.TryGetDecimal(out var d) => d,
++            JsonValueKind.String when decimal.TryParse(e.GetString(), out var ds) => ds,
++            _ => null
++        };
++    }
++}
+diff --git a/ZEN/SOURCE/Api/appsettings.WP4.sample.json b/ZEN/SOURCE/Api/appsettings.WP4.sample.json
+index cc6a3b1..3d2f1a0 100644
+--- a/ZEN/SOURCE/Api/appsettings.WP4.sample.json
++++ b/ZEN/SOURCE/Api/appsettings.WP4.sample.json
+@@ -1,18 +1,23 @@
+ {
+   "WP4": {
+     "Notifications": {
+       "Enabled": true,
+       "Provider": "InMemory" // or "Supabase"
+     },
+     "MultiTenancy": {
+       "Enabled": true,
+       "Strategy": "Host", // or "Header"
+       "Header": "X-Tenant"
+     },
+     "Analytics": {
+       "Enabled": true,
+       "RequestLogging": true
+     },
++    "Triggers": {
++      // Publish "fx.quote.created" after successful POST /api/fx/quote
++      "FxQuoteCreated": true
++    }
+   }
+ }
+diff --git a/ANALYSIS/PERF/scenarios/fx-quote-smoke.js b/ANALYSIS/PERF/scenarios/fx-quote-smoke.js
+new file mode 100644
+index 0000000..a2a2aa1
+--- /dev/null
++++ b/ANALYSIS/PERF/scenarios/fx-quote-smoke.js
+@@ -0,0 +1,54 @@
++import http from 'k6/http';
++import { sleep, check } from 'k6';
++
++export const options = {
++  vus: __ENV.VUS ? Number(__ENV.VUS) : 2,
++  duration: __ENV.DURATION || '30s'
++};
++
++const BASE = __ENV.BASE_URL || 'http://localhost:5001';
++const PATH = '/api/fx/quote';
++const TENANT = __ENV.TENANT || 'default';
++
++export default function () {
++  const amount = Math.floor(Math.random() * 5000) + 50;
++  const body = JSON.stringify({
++    fromCurrency: 'USD',
++    toCurrency: 'GBP',
++    amount
++  });
++
++  const res = http.post(`${BASE}${PATH}`, body, {
++    headers: {
++      'Content-Type': 'application/json',
++      'X-Tenant': TENANT
++    },
++    tags: { endpoint: 'fx-quote' }
++  });
++
++  check(res, {
++    'status is 200/201': r => r.status === 200 || r.status === 201,
++    'has JSON body': r => r.headers['Content-Type'] && r.headers['Content-Type'].includes('application/json')
++  });
++
++  sleep(0.5);
++}
+diff --git a/ZEN/TESTS/WP4/NotificationsHubSmokeTests.cs b/ZEN/TESTS/WP4/NotificationsHubSmokeTests.cs
+new file mode 100644
+index 0000000..b3c1de9
+--- /dev/null
++++ b/ZEN/TESTS/WP4/NotificationsHubSmokeTests.cs
+@@ -0,0 +1,63 @@
++using System.Net;
++using System.Net.Http;
++using System.Threading.Tasks;
++using Xunit;
++
++namespace SmartPay.Tests.WP4;
++
++/// <summary>
++/// Verifies that the SignalR negotiate endpoint exists when notifications are enabled.
++/// This test expects the app to be configured with WP4.Notifications.Enabled=true.
++/// </summary>
++public class NotificationsHubSmokeTests : IClassFixture<TestAppFactory>
++{
++    private readonly HttpClient _client;
++
++    public NotificationsHubSmokeTests(TestAppFactory factory)
++    {
++        _client = factory.CreateClient();
++    }
++
++    [Fact]
++    public async Task NegotiationEndpoint_Should_Exist()
++    {
++        var resp = await _client.PostAsync("/hubs/notifications/negotiate?negotiateVersion=1", new StringContent(""));
++        Assert.NotEqual(HttpStatusCode.NotFound, resp.StatusCode);
++    }
++}
+diff --git a/ZEN/TESTS/WP4/TenantResolverTests.cs b/ZEN/TESTS/WP4/TenantResolverTests.cs
+new file mode 100644
+index 0000000..f1d2e11
+--- /dev/null
++++ b/ZEN/TESTS/WP4/TenantResolverTests.cs
+@@ -0,0 +1,91 @@
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Configuration;
++using SmartPay.Infrastructure.MultiTenancy;
++using Xunit;
++
++namespace SmartPay.Tests.WP4;
++
++public class TenantResolverTests
++{
++    private static IConfiguration HeaderStrategyConfig() =>
++        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
++        {
++            ["WP4:MultiTenancy:Strategy"] = "Header",
++            ["WP4:MultiTenancy:Header"] = "X-Tenant"
++        }).Build();
++
++    private static IConfiguration HostStrategyConfig() =>
++        new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
++        {
++            ["WP4:MultiTenancy:Strategy"] = "Host"
++        }).Build();
++
++    [Fact]
++    public async Task HeaderStrategy_Uses_Header_Value()
++    {
++        var resolver = new HostTenantResolver(HeaderStrategyConfig());
++        var ctx = new DefaultHttpContext();
++        ctx.Request.Headers["X-Tenant"] = "blue";
++        var id = await resolver.ResolveAsync(ctx);
++        Assert.Equal("blue", id);
++    }
++
++    [Fact]
++    public async Task HostStrategy_Parses_Subdomain()
++    {
++        var resolver = new HostTenantResolver(HostStrategyConfig());
++        var ctx = new DefaultHttpContext();
++        ctx.Request.Host = new HostString("alpha.api.example.com");
++        var id = await resolver.ResolveAsync(ctx);
++        Assert.Equal("alpha", id);
++    }
++
++    [Fact]
++    public async Task HostStrategy_Defaults_When_No_Subdomain()
++    {
++        var resolver = new HostTenantResolver(HostStrategyConfig());
++        var ctx = new DefaultHttpContext();
++        ctx.Request.Host = new HostString("example.com");
++        var id = await resolver.ResolveAsync(ctx);
++        Assert.Equal("default", id);
++    }
++}
+diff --git a/ZEN/TESTS/WP4/README.md b/ZEN/TESTS/WP4/README.md
+new file mode 100644
+index 0000000..77c2b4b
+--- /dev/null
++++ b/ZEN/TESTS/WP4/README.md
+@@ -0,0 +1,18 @@
++# WP4 Tests
++
++- `NotificationsHubSmokeTests.cs` checks that the negotiate endpoint exists.
++- `TenantResolverTests.cs` validates the Host/Header strategies.
++
++> Note: If your solution uses a different test host pattern, move these into your existing test project and ensure references to the API project are present. A minimal `TestAppFactory` (WebApplicationFactory) is expected.
++
++## k6 smoke
++
++```bash
++BASE_URL=http://localhost:5001 TENANT=default k6 run ANALYSIS/PERF/scenarios/fx-quote-smoke.js
++```
++
++For a quick hit:
++```bash
++node ANALYSIS/PERF/scenarios/fx-quote-smoke.js # if you wrap with k6 docker or alias
++```
++
+diff --git a/.gitignore b/.gitignore
+index a3d4c10..fbd2e33 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,9 +1,12 @@
+ 
+ # WP4 local settings (do not commit real values)
+ ZEN/SOURCE/Api/appsettings.WP4.json
+ ANALYSIS/PERF/results/
+ ANALYSIS/PERF/**/*.tmp
++ANALYSIS/PERF/scenarios/**/*.out
+ 
+ # Build results
+ bin/
+ obj/
++TestResults/
++.vs/

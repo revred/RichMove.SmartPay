@@ -1,0 +1,531 @@
+From 9b3c2d1e4f5a6b7c8d9e0f1a Mon Sep 14 09:45:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Sun, 14 Sep 2025 09:45:00 +0100
+Subject: [WP6] Blazor UI & SDK Plan (docs-only): lightning-fast SSR,
+ low-cost Azure hosting, consumption examples
+X-Work-Package: WP6
+X-Patch-Name: 0945_WP6_Blazor_Plan.patch
+
+# Scope
+# - Documentation-only plan for WP6 (no code implementation).
+# - Defines UI architecture with Blazor SSR (Razor Components), render modes,
+#   real-time via SignalR, and ultra-low-cost Azure hosting strategies.
+# - Provides concrete consumption examples for SDK usage (C# and TypeScript),
+#   page patterns, performance budgets, and CI/CD outline.
+#
+# Commit is non-invasive and safe: adds/updates markdown files only.
+#
+---
+diff --git a/WPS/WP6.md b/WPS/WP6.md
+new file mode 100644
+index 0000000..41d1c62
+--- /dev/null
++++ b/WPS/WP6.md
+@@ -0,0 +1,175 @@
++# WP6 — UI & SDK (Plan only)
++
++> **Intent:** Ship a lightning‑fast, server‑rendered admin/merchant console using **Blazor (Razor Components, SSR)** with minimal runtime cost and a **REST‑first API** that auto‑generates typed SDKs. This document is the **plan**; there is **no implementation in this patch**.
++
++## Objectives
++1) **SDKs from OpenAPI**: REST endpoints as the single source of truth; generate **C#** and **TypeScript** clients.  
++2) **UI**: Server‑rendered Blazor (SSR) with interactive islands, no heavy graphics; real‑time via SignalR from WP4.  
++3) **Performance**: Sub‑100 ms server processing for common reads, **TTFB < 300 ms**, **FCP < 1.2 s** on low‑end devices.  
++4) **Cost**: Ultra‑lean Azure footprint suitable for low traffic and bursty use; scale up only when needed.
++
++## Deliverables (WP6.x)
++- **WP6.0 Plan (this doc).**
++- **WP6.1**: OpenAPI hardening, error model (RFC7807), SDK pipelines (NuGet/npm), docs site integration.
++- **WP6.2**: Blazor SSR shell (layout, auth, nav), tenant‑aware theming, real‑time toasts/list updates.
++- **WP6.3**: Key pages (Quotes, Rates, Tenants, Users), pagination & virtualization, output caching.
++- **WP6.4**: Perf pass + cost pass, Azure infra as code (Bicep/Terraform), synthetic checks.
++
++## Non‑Goals
++- SPA rewrite; heavy client‑side rendering; component bloat; custom charting (not needed).
++- Business logic in UI. UI remains thin; all logic stays in API.
++
++---
++
++## Architecture Summary
++**UI:** Blazor Web App (Razor Components). Render mode: **Server/Auto** (SSR + interactive islands).  
++**Realtime:** SignalR hub `/hubs/notifications` from WP4 (grouped by tenant).  
++**Auth:** Cookie‑based for UI, JWT for API calls, optional `X‑Tenant` header from WP4.  
++**SDKs:** Generated from `/openapi.json` (C# + TS).  
++
++```
++[Browser] ⇄ (HTTPS)
++   ↳ SSR HTML (Blazor) + minimal interactivity
++   ↳ WebSocket (SignalR) for tenant events
++[Blazor SSR] — uses —> [REST API + OpenAPI] — emits —> [Webhooks + SignalR]
++```
++
++---
++
++## Page Patterns (consumption examples)
++
++### Pattern A — Read‑only list (fastest path)
++1. **SSR** renders first fold with server data (no JS required).  
++2. On interaction (filter/sort), **hydrate** a small component.  
++3. **Virtualize** long lists; keep payloads tiny (columns as fields).  
++
++**Example (pseudocode; not implemented):**
++```razor
++@* SSR list with interactive island *@
++<QuoteList InitialItems="Model.Quotes" RenderMode="InteractiveOnDemand" />
++
++@code {
++    // Model.Quotes supplied by server handler; no extra API call on first paint.
++}
++```
++
++### Pattern B — Mutations (create/update)
++1. Submit via REST with an **Idempotency‑Key** header.  
++2. On success, UI updates immediately; **SignalR** also broadcasts `fx.quote.created` (WP4.1).  
++
++**C# SDK (pseudocode):**
++```csharp
++var client = new SmartPayClient(baseUrl, credentials, tenantId: "blue");
++var quote = await client.Fx.CreateQuoteAsync(new FxQuoteRequest
++{
++    FromCurrency = "USD",
++    ToCurrency = "GBP",
++    Amount = 1000m
++}, idempotencyKey: Guid.NewGuid().ToString("N"));
++```
++
++### Pattern C — Realtime table
++- Connect to `/hubs/notifications` and `On("fx.quote.created", ...)` prepend row.  
++- Avoid full refresh; patch only the changed row(s).
++
++---
++
++## Performance Playbook (lightning‑fast)
++**Targets:** TTFB < 300 ms (p95), HTML payload < 40 KB initial, no blocking fonts, 1 RTT to interactive island.
++
++1. **SSR + Streaming**: Render head + above‑the‑fold markup first; stream lists as they resolve.  
++2. **Interactive islands only**: Use `InteractiveOnDemand`/`InteractiveAuto` for small components.  
++3. **No large bundles**: Avoid big UI libraries; prefer plain Razor + minimal CSS (Tailwind optional).  
++4. **Output caching (API)**: Cache stable GETs (e.g., currency lists) for 5–15 minutes with ETags.  
++5. **Response compression**: Gzip/Brotli on App Service / Container Apps.  
++6. **Virtualization**: Use Blazor’s `Virtualize` on long tables; server‑side paging via cursors.  
++7. **Zero images** in data views; icon fonts avoided; inline critical CSS < 3 KB.  
++8. **Connection reuse**: Keep SignalR only where needed; lazy‑init on pages that need real‑time.  
++9. **Measure**: Use Playwright for TTFB/FCP assertions; k6 for API latency; `dotnet-counters` for CPU/GC.
++
++---
++
++## Cost‑Minimizing Azure Topologies
++> Choose one based on traffic. All support WebSockets for SignalR.
++
++### T1. **Azure Container Apps (ACA)** — scale‑to‑zero (cheapest when idle)
++- Host **API + Blazor SSR** in a single container; enable external ingress.  
++- Use **Azure SignalR Service (Serverless mode)** to offload connections.  
++- Pros: scale to 0; pay only for vCPU/GB‑s; good for spiky admin usage.  
++- Trade‑off: cold‑start on first request (mitigate with a 5‑min ping job if needed).
++
++### T2. **Azure App Service (Linux, B1/P1V3)** — simplest ops
++- Single Web App hosts **API + Blazor SSR**.  
++- Add **Azure SignalR Service (Classic/Default)** for fan‑out.  
++- Pros: easy deployment, built‑in logs, managed TLS; zero YAML.  
++- Trade‑off: cannot scale to zero; keep to one small instance while traffic is low.
++
++### T3. **Split marketing vs app**
++- Marketing/docs on **Static Web Apps** (near‑free).  
++- Admin app on **ACA/App Service** as above.  
++- Pros: zero‑cost marketing traffic; isolates SSR costs to real users.
++
++**Cost levers**
++- Keep **1 instance**, tiny vCPU/mem; compress responses; cap SignalR unit to minimum.  
++- Prefer **cursor paging** over large result sets; 30‑60s output cache on hot GETs.  
++- Schedule **autoscale rules** conservatively (cpu > 70% for 5 min → +1 instance).  
++
++---
++
++## SDK Strategy (REST‑first)
++**OpenAPI** is the contract. Generate:
++- **C#**: NSwag → `RichMove.SmartPay.Sdk` (NuGet).  
++- **TypeScript**: `openapi-typescript` (or NSwag TS) → `@richmove/smartpay` (npm).  
++
++**TypeScript (pseudocode):**
++```ts
++import { SmartPayClient } from "@richmove/smartpay";
++const client = new SmartPayClient({ baseUrl, apiKey, tenant: "blue" });
++const q = await client.fx.createQuote({ fromCurrency:"USD", toCurrency:"GBP", amount:1000 });
++```
++
++**Webhooks**
++- Sign with HMAC (`Richmove-Signature: t=..., v1=...`).  
++- Mirror realtime topics (e.g., `fx.quote.created`).  
++
++---
++
++## Security & Tenancy
++- **Auth**: Cookie for UI; OAuth2 Client‑Credentials/API‑Keys for server‑to‑server; JWT for SPA tooling.  
++- **Tenant boundary**: `X‑Tenant` + server validation; group keys in SignalR groups `tenant::<id>`.  
++- **RBAC**: Roles (`Owner`, `Admin`, `Support`, `Viewer`) enforced in handlers and UI authorizers.  
++
++---
++
++## CI/CD Outline
++1. Build API → validate `/openapi.json`.  
++2. Generate SDKs → test → publish **NuGet/npm** with semver.  
++3. Build Blazor SSR app → Playwright smoke (TTFB/FCP budgets).  
++4. Deploy to chosen Azure topology (Bicep/Terraform/YAML).  
++5. Post‑deploy synthetic checks (k6 smoke; SignalR negotiation).  
++
++---
++
++## Go/No‑Go (WP6.2 gate)
++- ✅ P95 TTFB < 300 ms in staging @ low RPS
++- ✅ Alerts on 5xx, SignalR disconnect spikes, cold‑start > 3 s
++- ✅ SDK QuickStarts pass (C#, TS)
++- ✅ Docs updated with live endpoints
++
++---
++
++## Appendix — Recommended Defaults
++- Render mode: **Server** for dashboards; **InteractiveOnDemand** islands for grids/forms.  
++- Page size 25 (cursor‑based); API default limit 50; max 200.  
++- Gzip/Brotli enabled; static caching for `/css/*` 7 days with file‑hash naming.  
++- Ping job (optional) every 10 min for ACA to keep warm during business hours only.
+diff --git a/DOCS/UI/Blazor/Plan.md b/DOCS/UI/Blazor/Plan.md
+new file mode 100644
+index 0000000..3a8b0df
+--- /dev/null
++++ b/DOCS/UI/Blazor/Plan.md
+@@ -0,0 +1,210 @@
++# Blazor UI Plan — Lightning‑Fast SSR, Minimal JS
++
++**Key idea:** Render HTML on the server (SSR) for instant first‑paint; hydrate *only* small islands on interaction. Use SignalR for real‑time updates from WP4. No heavy charts/images — just fields and tables.
++
++## Render Modes
++- **Server (SSR)** — default for pages; keeps memory use modest if circuits are short‑lived.  
++- **InteractiveOnDemand** — hydrate a component *after* first paint, on user action or when in viewport.  
++- **InteractiveAuto** — for tiny widgets (toast, status badge) where auto is fine.  
++
++> **Rule:** No page‑wide interactivity unless absolutely required.
++
++## Page Composition
++- **Layout**: header (tenant switch), left nav, content area.  
++- **List pages**: search, filters, cursor pagination, `Virtualize` for long lists.  
++- **Detail pages**: read‑first (SSR) + discrete edit modals.  
++- **Create**: dialog with optimistic UI; on success, emit to list via SignalR and toast.  
++
++## Real‑time (from WP4)
++- Tenant joins group `tenant::<id>` on hub connect.  
++- Topics include: `fx.quote.created`, `fx.quote.updated`, `kyc.status.changed`.  
++- UI pattern: patch list in place; do not refetch entire page.
++
++## Performance Budgets & Checks
++- **TTFB** < 300 ms (p95) server‑side.  
++- **First Contentful Paint** < 1.2 s on mid‑range hardware.  
++- **HTML** < 40 KB per initial view.  
++- **JS** < 50 KB gzip per page (ideally ~20 KB).  
++- **Hydration** time < 100 ms for an island.  
++
++### Measuring
++- **k6**: endpoint latency (p50/p95/p99).  
++- **Playwright**: TTFB + FCP budgets in CI; fail build on regression.  
++- **dotnet-counters**: CPU, GC, threadpool saturation during smoke.  
++
++## Data Access Strategy
++1. SSR **loads first fold** on the server handler.  
++2. Infinite scroll uses **cursor pagination** (`?cursor=&limit=`).  
++3. API responses are **field‑only** (no HTML); UI composes view‑models.  
++4. **Idempotency‑Key** on POST/PUT to avoid duplicates on retry.  
++
++## Caching
++- **Output caching** for stable GETs (e.g., currency lists) 5–15 min.  
++- **ETag/If‑None‑Match** for detail GETs.  
++- **Client caching** for static assets with file hashes.  
++
++## Error Handling
++- Use RFC7807 `ProblemDetails` from API.  
++- Show non‑blocking banner; retry options for idempotent operations.  
++
++## Tenancy & Theming
++- Inject `TenantContext` into layout; theme per tenant (light CSS vars only).  
++- Guard routes by RBAC; hide controls not permitted by role.  
++
++## Example User Flows (pseudocode only)
++
++### Quotes: list + create
++```razor
++@* SSR renders the list; creation is an interactive island *@
++<QuoteList InitialItems="Model.Quotes" RenderMode="InteractiveOnDemand" />
++<CreateQuoteDialog RenderMode="InteractiveOnDemand" />
++```
++
++```csharp
++// In CreateQuoteDialog.razor.cs (pseudocode)
++var client = SdkFactory.Create(HttpContext, tenantId);
++await client.Fx.CreateQuoteAsync(new FxQuoteRequest { FromCurrency="USD", ToCurrency="GBP", Amount=1000m },
++                                 idempotencyKey: Guid.NewGuid().ToString("N"));
++// Success → close dialog; SignalR event updates list (fx.quote.created)
++```
++
++### Realtime patch
++```csharp
++// In QuoteList.razor.cs (pseudocode)
++hub.On<object>("fx.quote.created", payload => {
++    Quotes.Insert(0, Map(payload));
++    StateHasChanged();
++});
++```
++
++## Accessibility (A11y)
++- Focus management on dialog open/close.  
++- Semantic tables with `<thead>/<tbody>`, proper `<th scope="col">`.  
++- Color‑contrast AA; large hit‑targets on mobile.  
++
++## Testing
+-- **bUnit**: component logic.  
++- **Playwright**: auth, nav, create quote, realtime arrival.  
++- **k6**: smoke for `/api/fx/quote` + negotiate endpoint (already in WP4.1).
++
++## Rollout Plan
++1. Skeleton layout + auth.  
++2. Quotes list (SSR), create dialog (island), realtime patch.  
++3. Rates & Tenants pages.  
++4. Performance pass (budgets enforced in CI).  
++
++---
++
++### FAQ
++**Why not Blazor WASM?** Higher JS payload, more moving parts, and no SSR by default—overkill for forms/tables.  
++**Will SignalR be expensive?** Use Azure SignalR Service with the smallest unit and only connect on pages that need realtime.  
++**How to keep costs near zero?** Prefer Azure Container Apps scale‑to‑zero or a single tiny App Service instance; split marketing/docs to static hosting.
+diff --git a/DOCS/Hosting/Azure.LowCost.md b/DOCS/Hosting/Azure.LowCost.md
+new file mode 100644
+index 0000000..a1b2c56
+--- /dev/null
++++ b/DOCS/Hosting/Azure.LowCost.md
+@@ -0,0 +1,165 @@
++# Azure Hosting — Low‑Cost Patterns for Blazor SSR + API
++
++This guide prioritizes **minimal monthly spend** while keeping SSR fast and realtime reliable.
++
++## Option A — Azure Container Apps (ACA) *scale‑to‑zero*
++**When:** Admin console with spiky traffic; OK with cold‑start.  
++**How:**
++- One container image hosting **API + Blazor SSR**; external ingress enabled.
++- Attach **Azure SignalR Service** in **serverless** mode for reliable fan‑out.
++- Configure **min replicas = 0**, **max replicas = 2**; scale on CPU > 70% (5 min).
++- Add a **weekday business‑hours ping** (optional) to reduce cold‑starts.
++
++**Pros:** Lowest idle cost; simple single image.  
++**Cons:** Cold‑start latency on first request after idle.
++
++## Option B — Azure App Service (Linux) *single small instance*
++**When:** You want “always‑on” simplicity without YAML.  
++**How:**
++- Single Web App hosts **API + Blazor SSR**.
++- Add **Azure SignalR Service (Classic/Default)** for persistent connections.
++- Turn on **Always On** (keeps the app warm), **Compression**, **ARR Affinity** (sticky).
++
++**Pros:** Dead simple; good diagnostics; zero container plumbing.  
++**Cons:** Cannot scale to 0; a small fixed monthly cost.
++
++## Option C — Split stack for near‑free marketing
++- **Static Web Apps** (or GitHub Pages) for docs/marketing (zero‑to‑low cost).  
++- **ACA/App Service** for the admin app only.  
++
++---
++
++## Cost Levers
++1. **One instance** only until traffic demands more.  
++2. **Compression** for responses; **ETags** for GETs.  
++3. **Output caching** for hot endpoints (30–60s can slash CPU).  
++4. Scale **SignalR** to minimum unit; connect only on realtime pages.  
++5. Keep **GC pressure low**: avoid large allocations; stream results where possible.  
++
++---
++
++## Operational Tips
++- Configure **health endpoints** (`/health/live`, `/health/ready`); tie ACA/App Service probes.  
++- Log budget breaches (p95 > 300 ms TTFB) as **warnings**; alert on p99 > 1 s sustained.  
++- Store **OpenAPI** at `/openapi.json` and snapshot in CI for SDK generation.
+diff --git a/DOCS/API/SDK-Consumption.md b/DOCS/API/SDK-Consumption.md
+new file mode 100644
+index 0000000..2a5c3e1
+--- /dev/null
++++ b/DOCS/API/SDK-Consumption.md
+@@ -0,0 +1,152 @@
+# SDK Consumption — C# and TypeScript (Plan)
++
++> **Status:** Generated SDKs are planned in WP6.1; code below is **illustrative only**.
++
++## C# (NuGet) — `RichMove.SmartPay.Sdk`
++
++### Instantiate
++```csharp
++var client = new SmartPayClient(
++    baseUrl: cfg["SmartPay:BaseUrl"],
++    credential: new ClientCredentials(cfg["SmartPay:ClientId"], cfg["SmartPay:ClientSecret"]),
++    tenantId: "blue");
++```
++
++### Create a quote (idempotent)
++```csharp
++var quote = await client.Fx.CreateQuoteAsync(new FxQuoteRequest
++{
++    FromCurrency = "USD",
++    ToCurrency   = "GBP",
++    Amount       = 2500m
++}, idempotencyKey: Guid.NewGuid().ToString("N"));
++```
++
++### Paging through results (cursor)
++```csharp
++var page = await client.Fx.ListQuotesAsync(limit: 25);
++while (!string.IsNullOrEmpty(page.NextCursor))
++{
++    page = await client.Fx.ListQuotesAsync(limit: 25, cursor: page.NextCursor);
++}
++```
++
++### Webhook verification (HMAC, conceptual)
++```csharp
++var ok = WebhookVerifier.Verify(headers, body, secret); // true/false
++```
++
++---
++
++## TypeScript (npm) — `@richmove/smartpay`
++
++### Instantiate
++```ts
++import { SmartPayClient } from "@richmove/smartpay";
++
++const client = new SmartPayClient({
++  baseUrl: process.env.SMARTPAY_BASE_URL!,
++  apiKey: process.env.SMARTPAY_API_KEY!,
++  tenant: "blue"
++});
++```
++
++### Create a quote
++```ts
++const q = await client.fx.createQuote({
++  fromCurrency: "USD",
++  toCurrency:   "GBP",
++  amount:       2500
++}, { idempotencyKey: crypto.randomUUID().replace(/-/g, "") });
++```
++
++### Iterate with a cursor
++```ts
++for await (const item of client.fx.iterQuotes({ limit: 25 })) {
++  console.log(item.id);
++}
++```
++
++### Verify webhook (conceptual)
++```ts
++import { verifyWebhook } from "@richmove/smartpay/webhooks";
++
++const ok = verifyWebhook(req.headers, rawBody, process.env.WEBHOOK_SECRET!);
++```
++
++---
++
++## Best Practices
++- Use **Client‑Credentials** for servers, **API keys** for simple server integrations.  
++- Always pass **Idempotency‑Key** for POST/PUT.  
++- Expect **RFC7807 ProblemDetails** for errors; inspect `type`, `title`, `detail`.
+diff --git a/DOCS/Perf/Blazor.Fast.md b/DOCS/Perf/Blazor.Fast.md
+new file mode 100644
+index 0000000..8f6a1c3
+--- /dev/null
++++ b/DOCS/Perf/Blazor.Fast.md
+@@ -0,0 +1,170 @@
+# Blazor SSR — Speed Cookbook (Plan)
++
++**Goal:** Deliver sub‑second perceived performance with tiny payloads and minimal server load.
++
++## Checklists
++
++### Rendering
++- Prefer **SSR**; only hydrate small components (`InteractiveOnDemand`).  
++- Stream partials when lists are slow; never block head/hero.  
++- Avoid big component libraries; plain Razor + minimal CSS.  
++
++### Data
++- **Cursor pagination**; page size 25 by default.  
++- **Output cache** stable GETs for 30–60 s; **ETag** for details.  
++- Compress with **Brotli**/**Gzip**.  
++
++### Realtime
++- Connect SignalR **only on pages that need it**; disconnect on navigation.  
++- Batch UI updates where possible (coalesce events).  
++
++### Memory
++- Avoid large in‑memory lists in components; use `Virtualize`.  
++- Dispose subscriptions on `IDisposable`.  
++
++### CI Budgets
++- TTFB p95 < 300 ms; FCP p95 < 1.2 s.  
++- Regressions fail the build; publish flame‑graphs for slow paths.
++
++## Patterns
++
++### Island hydration trigger
++Hydrate on visibility or interaction; do not auto‑hydrate offscreen tables.
++
++### Toasts for realtime
++Use small, ephemeral notifications; avoid re‑rendering entire pages on events.
++
++### “Fast Empty” page shell
++Render chromes (nav, header) instantly; lazy load content region.
++
++## Diagnostics
++- `dotnet-counters monitor --counters System.Runtime` during smoke.  
++- Response timing middleware (already in WP4 Analytics) to record p95/p99.  
++- Capture **server timing** headers for browser DevTools.
++
++## Rollback strategy
++- Feature flags allow disabling heavy components or realtime on the fly.  
++- Fallback to plain SSR (no hubs) if SignalR unit is constrained.
+diff --git a/WPS/README.md b/WPS/README.md
+new file mode 100644
+index 0000000..95ad23f
+--- /dev/null
++++ b/WPS/README.md
+@@ -0,0 +1,33 @@
++# Work Packages (WPS)
++
++This directory tracks scoped, incremental plans. Each WP is designed to be independently releasable with explicit gates.
++
++## Index
++- **WP4** — Realtime + Multi‑Tenancy + Analytics (scaffold complete; triggers in WP4.1).
++- **WP6** — UI & SDK (plan only in this commit).
++
++## Status Keys
++- **Plan**: documentation only, no code changes.  
++- **Scaffold**: wiring + placeholders, no business logic.  
++- **Feature**: end‑to‑end behavior behind flags.  
++- **Hardening**: perf, cost, security, and docs.
+diff --git a/README.md b/README.md
+index e69de29..4acb8b1 100644
+--- a/README.md
++++ b/README.md
+@@ -0,0 +1,41 @@
++# RichMove.SmartPay — Overview
++
++This repository powers the SmartPay API and related admin/merchant UI.  
++
++## Current Focus
++- **WP4**: Realtime notifications, multi‑tenancy scaffolding, lightweight analytics.  
++- **WP6**: UI & SDK plan (Blazor SSR + REST‑first SDKs). This commit adds **documentation only** for WP6.
++
++## Quick Links
++- **WP4**: `WPS/WP4.md`
++- **WP6 Plan**: `WPS/WP6.md`
++- **Blazor UI Plan**: `DOCS/UI/Blazor/Plan.md`
++- **Low‑Cost Azure Hosting**: `DOCS/Hosting/Azure.LowCost.md`
++- **SDK Consumption**: `DOCS/API/SDK-Consumption.md`
++- **Blazor Perf Cookbook**: `DOCS/Perf/Blazor.Fast.md`
++
++## Contributing
++- Prefer **OpenAPI‑first** for new endpoints.  
++- Keep UI **server‑rendered** and minimal; use realtime only where it adds value.  
++- Track performance budgets; fail builds on regressions.

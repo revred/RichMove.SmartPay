@@ -1,0 +1,527 @@
+From 3f0e5d1c2b7e1a9d0c0a999 Mon Sep 14 04:00:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Sun, 14 Sep 2025 04:00:00 +0100
+Subject: [WP4] Real-time notifications, multi-tenancy scaffolding, and analytics
+X-Work-Package: WP4
+X-Patch-Name: 0400_WP4_LetsGo.patch
+
+# Overview
+# - Adds **WP4 scaffolding** with three focus areas:
+#   1) Real-time notifications (SignalR hub + service abstraction).
+#   2) Multi-tenancy plumbing (tenant resolver + middleware).
+#   3) Lightweight analytics (request/endpoint counters + request logging).
+# - Adds sample configuration file: appsettings.WP4.sample.json
+# - Adds ANALYSIS/PERF scaffold for future perf tests (as requested).
+# - Non-breaking: no behavioral change unless explicitly wired in Program.cs
+#   via the provided extension methods (see WP4ServiceRegistration.cs).
+#
+# After applying:
+#   - In ZEN/SOURCE/Api/Program.cs add (near service registration):
+#       using SmartPay.Api.Bootstrap;
+#       builder.Services.AddWp4Features(builder.Configuration);
+#     And add (near app pipeline):
+#       app.UseWp4Features(builder.Configuration);
+#
+#   - Optional: If you want tenant-by-subdomain, set WP4:MultiTenancy:Strategy to "Host".
+#   - Optional: Map the notifications hub UI or your SPA to /hubs/notifications.
+#
+# Notes:
+#   - Telemetry uses built-in Diagnostics.Metrics (no external packages).
+#   - Notification service defaults to in-memory; Supabase stub included for WP5.
+#
+---
+diff --git a/ANALYSIS/PERF/PerfPlan.md b/ANALYSIS/PERF/PerfPlan.md
+new file mode 100644
+index 0000000..c2a2b1e
+--- /dev/null
++++ b/ANALYSIS/PERF/PerfPlan.md
+@@ -0,0 +1,63 @@
++# PERF Plan (WP4 bootstrap)
++
++This folder scaffolds performance analysis work (moved under `ANALYSIS/` as agreed).
++
++## Goals
++1. Establish baseline API latency for `/health/*` and `/api/fx/quote` in **Release**.
++2. Create YAML-driven perf scenarios (users, RPS, payload ranges).
++3. Track p95/p99 latency and error budget per endpoint.
++
++## Suggested Tooling
++- `dotnet-counters` for ad‑hoc metrics
++- `bombardier` or `wrk` for quick load probes
++- `k6` for scripted scenarios (YAML → JSON transform step)
++
++## Next (WP4.1)
++- Add `ANALYSIS/PERF/scenarios/quote.yaml` and a tiny runner.
++- Store results under `ANALYSIS/PERF/results/YYYYMMDD_hhmm/`.
++
++## YAML Sketch
++```yaml
++target: "https://localhost:5001"
++warmup_seconds: 10
++duration_seconds: 60
++endpoints:
++  - name: fx-quote
++    method: POST
++    path: /api/fx/quote
++    body_template:
++      fromCurrency: USD
++      toCurrency: GBP
++      amount: [50, 100, 1000, 5000]
++    rps: 25
++```
+diff --git a/WPS/WP4.md b/WPS/WP4.md
+new file mode 100644
+index 0000000..8b92c11
+--- /dev/null
++++ b/WPS/WP4.md
+@@ -0,0 +1,106 @@
++# WP4 — Advanced Features (Scaffold)
++
++Scope tracked here is intentionally **scaffold-first** to keep changes low-risk while enabling rapid iteration.
++
++## 1) Real-time notifications
++- Add SignalR hub at `/hubs/notifications` (per-tenant groups).
++- Notification service abstraction with in-memory default.
++- Hook points ready for domain events (WP4.2).
++
++## 2) Multi-tenancy plumbing
++- Ambient `TenantContext` resolved from `X-Tenant` header or subdomain.
++- `ITenantResolver` default strategy: `Host` or `Header` (configurable).
++- Middleware that sets `TenantContext.Current` per request.
++
++## 3) Analytics (lightweight)
++- Request logging middleware (structured logs).
++- Endpoint and status code counters via `System.Diagnostics.Metrics`.
++- Optional: surface `/metrics` endpoint in WP4.3.
++
++## 4) Configuration
++Add `appsettings.WP4.sample.json` then merge into your environment files.
++
++```json
++{
++  "WP4": {
++    "Notifications": { "Enabled": true, "Provider": "InMemory" },
++    "MultiTenancy": { "Enabled": true, "Strategy": "Host", "Header": "X-Tenant" },
++    "Analytics": { "Enabled": true, "RequestLogging": true }
++  }
++}
++```
++
++## 5) Wire-up in Program.cs
++```csharp
++using SmartPay.Api.Bootstrap;
++builder.Services.AddWp4Features(builder.Configuration);
++app.UseWp4Features(builder.Configuration);
++```
++
++## 6) Tests (WP4.2+)
++- Hub smoke tests to ensure mapping and group join.
++- Tenant resolution unit tests (host/header).
++- Metrics counters presence & increment tests.
++
++## 7) Out-of-scope for WP4 (defer to WP5)
++- Supabase Realtime wiring for notifications (stub exists).
++- Multi-tenant data isolation at DB level (schema/row filter).
++- Analytics dashboard UI.
+diff --git a/ZEN/SOURCE/Api/Analytics/MetricsRegistry.cs b/ZEN/SOURCE/Api/Analytics/MetricsRegistry.cs
+new file mode 100644
+index 0000000..c8bd7e1
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Analytics/MetricsRegistry.cs
+@@ -0,0 +1,61 @@
++using System.Diagnostics.Metrics;
++
++namespace SmartPay.Api.Analytics;
++
++/// <summary>
++/// Central place for custom meters/counters. No external dependencies.
++/// </summary>
++public static class MetricsRegistry
++{
++    public const string MeterName = "SmartPay.Api";
++
++    private static readonly Meter Meter = new(MeterName, "1.0.0");
++
++    public static readonly Counter<long> RequestsTotal =
++        Meter.CreateCounter<long>("http.requests.total", "requests", "Total HTTP requests by route and status");
++
++    public static readonly Histogram<double> RequestDurationMs =
++        Meter.CreateHistogram<double>("http.request.duration.ms", "ms", "Request duration in milliseconds");
++}
+diff --git a/ZEN/SOURCE/Api/Analytics/RequestLoggingMiddleware.cs b/ZEN/SOURCE/Api/Analytics/RequestLoggingMiddleware.cs
+new file mode 100644
+index 0000000..c71a1a3
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Analytics/RequestLoggingMiddleware.cs
+@@ -0,0 +1,77 @@
++using System.Diagnostics;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Logging;
++
++namespace SmartPay.Api.Analytics;
++
++/// <summary>
++/// Minimal request logging + metrics.
++/// </summary>
++public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<RequestLoggingMiddleware> logger)
++{
++    public async Task Invoke(HttpContext context)
++    {
++        var sw = Stopwatch.StartNew();
++        try
++        {
++            await next(context);
++        }
++        finally
++        {
++            sw.Stop();
++            var path = context.GetEndpoint()?.DisplayName ?? context.Request.Path.ToString();
++            var status = context.Response?.StatusCode ?? 0;
++
++            // Counters
++            MetricsRegistry.RequestsTotal.Add(1, new KeyValuePair<string, object?>("route", path),
++                                                new KeyValuePair<string, object?>("status", status));
++            MetricsRegistry.RequestDurationMs.Record(sw.Elapsed.TotalMilliseconds,
++                new KeyValuePair<string, object?>("route", path),
++                new KeyValuePair<string, object?>("status", status));
++
++            // Logs
++            logger.LogInformation("HTTP {Method} {Path} -> {Status} in {ElapsedMs}ms",
++                context.Request.Method, path, status, sw.Elapsed.TotalMilliseconds);
++        }
++    }
++}
+diff --git a/ZEN/SOURCE/Api/Bootstrap/WP4AppConfig.cs b/ZEN/SOURCE/Api/Bootstrap/WP4AppConfig.cs
+new file mode 100644
+index 0000000..f2cb1c9
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Bootstrap/WP4AppConfig.cs
+@@ -0,0 +1,51 @@
++using Microsoft.AspNetCore.Builder;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using SmartPay.Api.Analytics;
++using SmartPay.Api.Middleware;
++
++namespace SmartPay.Api.Bootstrap;
++
++public static class WP4AppConfig
++{
++    public static IApplicationBuilder UseWp4Features(this IApplicationBuilder app, IConfiguration cfg)
++    {
++        var wp4 = new Wp4Options(cfg);
++
++        if (wp4.AnalyticsEnabled && wp4.RequestLogging)
++            app.UseMiddleware<RequestLoggingMiddleware>();
++
++        if (wp4.MultiTenancyEnabled)
++            app.UseMiddleware<TenantMiddleware>();
++
++        if (wp4.NotificationsEnabled)
++        {
++            app.UseRouting();
++            app.UseEndpoints(endpoints =>
++            {
++                endpoints.MapHub<SmartPay.Api.Notifications.NotificationsHub>("/hubs/notifications");
++            });
++        }
++
++        return app;
++    }
++
++    public static IServiceCollection AddWp4Features(this IServiceCollection services, IConfiguration cfg)
++    {
++        var wp4 = new Wp4Options(cfg);
++
++        if (wp4.NotificationsEnabled)
++        {
++            services.AddSignalR();
++            SmartPay.Infrastructure.Notifications.NotificationsRegistration.Add(services, cfg);
++        }
++
++        if (wp4.MultiTenancyEnabled)
++            SmartPay.Infrastructure.MultiTenancy.MultiTenancyRegistration.Add(services, cfg);
++
++        return services;
++    }
++}
+diff --git a/ZEN/SOURCE/Api/Bootstrap/WP4ServiceRegistration.cs b/ZEN/SOURCE/Api/Bootstrap/WP4ServiceRegistration.cs
+new file mode 100644
+index 0000000..87c9ec1
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Bootstrap/WP4ServiceRegistration.cs
+@@ -0,0 +1,63 @@
++using Microsoft.Extensions.Configuration;
++
++namespace SmartPay.Api.Bootstrap;
++
++/// <summary>
++/// Reads WP4 config with sensible fallbacks.
++/// </summary>
++public sealed class Wp4Options
++{
++    public bool NotificationsEnabled { get; init; }
++    public string NotificationsProvider { get; init; } = "InMemory";
++
++    public bool MultiTenancyEnabled { get; init; }
++    public string MultiTenancyStrategy { get; init; } = "Host"; // or "Header"
++    public string TenantHeader { get; init; } = "X-Tenant";
++
++    public bool AnalyticsEnabled { get; init; }
++    public bool RequestLogging { get; init; }
++
++    public Wp4Options(IConfiguration cfg)
++    {
++        NotificationsEnabled = cfg.GetValue("WP4:Notifications:Enabled", true);
++        NotificationsProvider = cfg.GetValue("WP4:Notifications:Provider", "InMemory")!;
++
++        MultiTenancyEnabled = cfg.GetValue("WP4:MultiTenancy:Enabled", true);
++        MultiTenancyStrategy = cfg.GetValue("WP4:MultiTenancy:Strategy", "Host")!;
++        TenantHeader = cfg.GetValue("WP4:MultiTenancy:Header", "X-Tenant")!;
++
++        AnalyticsEnabled = cfg.GetValue("WP4:Analytics:Enabled", true);
++        RequestLogging = cfg.GetValue("WP4:Analytics:RequestLogging", true);
++    }
++}
+diff --git a/ZEN/SOURCE/Api/Middleware/TenantMiddleware.cs b/ZEN/SOURCE/Api/Middleware/TenantMiddleware.cs
+new file mode 100644
+index 0000000..e4a3f2b
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Middleware/TenantMiddleware.cs
+@@ -0,0 +1,59 @@
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Configuration;
++using SmartPay.Core.MultiTenancy;
++
++namespace SmartPay.Api.Middleware;
++
++public sealed class TenantMiddleware(RequestDelegate next, IConfiguration cfg, ITenantResolver resolver)
++{
++    public async Task Invoke(HttpContext context)
++    {
++        var tenantId = await resolver.ResolveAsync(context);
++        TenantContext.Current = new TenantContext(tenantId);
++        try
++        {
++            await next(context);
++        }
++        finally
++        {
++            TenantContext.Current = TenantContext.Empty;
++        }
++    }
++}
+diff --git a/ZEN/SOURCE/Api/Notifications/INotificationService.cs b/ZEN/SOURCE/Api/Notifications/INotificationService.cs
+new file mode 100644
+index 0000000..0a7b4b5
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Notifications/INotificationService.cs
+@@ -0,0 +1,17 @@
++namespace SmartPay.Api.Notifications;
++
++public interface INotificationService
++{
++    Task PublishAsync(string tenantId, string topic, object payload, CancellationToken ct = default);
++}
+diff --git a/ZEN/SOURCE/Api/Notifications/NotificationsHub.cs b/ZEN/SOURCE/Api/Notifications/NotificationsHub.cs
+new file mode 100644
+index 0000000..c18e9a0
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Notifications/NotificationsHub.cs
+@@ -0,0 +1,49 @@
++using Microsoft.AspNetCore.SignalR;
++using SmartPay.Core.MultiTenancy;
++
++namespace SmartPay.Api.Notifications;
++
++public sealed class NotificationsHub : Hub
++{
++    public override async Task OnConnectedAsync()
++    {
++        var tenant = TenantContext.Current.TenantId;
++        if (!string.IsNullOrWhiteSpace(tenant))
++        {
++            await Groups.AddToGroupAsync(Context.ConnectionId, Group(tenant));
++        }
++        await base.OnConnectedAsync();
++    }
++
++    internal static string Group(string tenantId) => $"tenant::{tenantId}";
++}
+diff --git a/ZEN/SOURCE/Api/appsettings.WP4.sample.json b/ZEN/SOURCE/Api/appsettings.WP4.sample.json
+new file mode 100644
+index 0000000..cc6a3b1
+--- /dev/null
++++ b/ZEN/SOURCE/Api/appsettings.WP4.sample.json
+@@ -0,0 +1,18 @@
++{
++  "WP4": {
++    "Notifications": {
++      "Enabled": true,
++      "Provider": "InMemory" // or "Supabase"
++    },
++    "MultiTenancy": {
++      "Enabled": true,
++      "Strategy": "Host", // or "Header"
++      "Header": "X-Tenant"
++    },
++    "Analytics": {
++      "Enabled": true,
++      "RequestLogging": true
++    }
++  }
++}
+diff --git a/ZEN/SOURCE/Core/MultiTenancy/ITenantResolver.cs b/ZEN/SOURCE/Core/MultiTenancy/ITenantResolver.cs
+new file mode 100644
+index 0000000..f6b2f67
+--- /dev/null
++++ b/ZEN/SOURCE/Core/MultiTenancy/ITenantResolver.cs
+@@ -0,0 +1,27 @@
++using Microsoft.AspNetCore.Http;
++
++namespace SmartPay.Core.MultiTenancy;
++
++public interface ITenantResolver
++{
++    Task<string> ResolveAsync(HttpContext context);
++}
++
++public static class TenantId
++{
++    public const string Default = "default";
++}
+diff --git a/ZEN/SOURCE/Core/MultiTenancy/TenantContext.cs b/ZEN/SOURCE/Core/MultiTenancy/TenantContext.cs
+new file mode 100644
+index 0000000..d3a7f41
+--- /dev/null
++++ b/ZEN/SOURCE/Core/MultiTenancy/TenantContext.cs
+@@ -0,0 +1,28 @@
++namespace SmartPay.Core.MultiTenancy;
++
++public sealed record TenantContext(string TenantId)
++{
++    private static readonly AsyncLocal<TenantContext> _current = new();
++    public static TenantContext Current
++    {
++        get => _current.Value ?? Empty;
++        set => _current.Value = value;
++    }
++
++    public static TenantContext Empty { get; } = new(TenantId.Default);
++}
+diff --git a/ZEN/SOURCE/Infrastructure/MultiTenancy/HostTenantResolver.cs b/ZEN/SOURCE/Infrastructure/MultiTenancy/HostTenantResolver.cs
+new file mode 100644
+index 0000000..fd1c2f3
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/MultiTenancy/HostTenantResolver.cs
+@@ -0,0 +1,68 @@
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.Configuration;
++using SmartPay.Core.MultiTenancy;
++
++namespace SmartPay.Infrastructure.MultiTenancy;
++
++public sealed class HostTenantResolver(IConfiguration cfg) : ITenantResolver
++{
++    public Task<string> ResolveAsync(HttpContext context)
++    {
++        var strategy = cfg.GetValue("WP4:MultiTenancy:Strategy", "Host")!;
++        var headerName = cfg.GetValue("WP4:MultiTenancy:Header", "X-Tenant")!;
++
++        if (string.Equals(strategy, "Header", StringComparison.OrdinalIgnoreCase))
++        {
++            if (context.Request.Headers.TryGetValue(headerName, out var tenantHeader) &&
++                !string.IsNullOrWhiteSpace(tenantHeader))
++                return Task.FromResult(tenantHeader.ToString());
++        }
++
++        // Default: derive from subdomain (e.g., foo.api.example.com → foo)
++        var host = context.Request.Host.Host ?? string.Empty;
++        var parts = host.Split('.', StringSplitOptions.RemoveEmptyEntries);
++        if (parts.Length >= 3) // subdomain.domain.tld
++            return Task.FromResult(parts[0]);
++
++        return Task.FromResult(TenantId.Default);
++    }
++}
++
++public static class MultiTenancyRegistration
++{
++    public static IServiceCollection Add(this IServiceCollection services, IConfiguration cfg)
++    {
++        services.AddScoped<ITenantResolver, HostTenantResolver>();
++        return services;
++    }
++}
+diff --git a/ZEN/SOURCE/Infrastructure/Notifications/InMemoryNotificationService.cs b/ZEN/SOURCE/Infrastructure/Notifications/InMemoryNotificationService.cs
+new file mode 100644
+index 0000000..97a1afc
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Notifications/InMemoryNotificationService.cs
+@@ -0,0 +1,42 @@
++using Microsoft.AspNetCore.SignalR;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using SmartPay.Api.Notifications;
++using SmartPay.Core.MultiTenancy;
++
++namespace SmartPay.Infrastructure.Notifications;
++
++internal sealed class InMemoryNotificationService(IHubContext<SmartPay.Api.Notifications.NotificationsHub> hub)
++    : INotificationService
++{
++    public Task PublishAsync(string tenantId, string topic, object payload, CancellationToken ct = default)
++        => hub.Clients.Group(NotificationsHub.Group(tenantId)).SendAsync(topic, payload, ct);
++}
++
++public static class NotificationsRegistration
++{
++    public static IServiceCollection Add(this IServiceCollection services, IConfiguration cfg)
++    {
++        var provider = cfg.GetValue("WP4:Notifications:Provider", "InMemory")!;
++        if (string.Equals(provider, "InMemory", StringComparison.OrdinalIgnoreCase))
++        {
++            services.AddSingleton<INotificationService, InMemoryNotificationService>();
++        }
++        else
++        {
++            services.AddSingleton<INotificationService, SupabaseRealtimeNotificationService>();
++        }
++        return services;
++    }
++}
+diff --git a/ZEN/SOURCE/Infrastructure/Notifications/SupabaseRealtimeNotificationService.cs b/ZEN/SOURCE/Infrastructure/Notifications/SupabaseRealtimeNotificationService.cs
+new file mode 100644
+index 0000000..a3f1b2c
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Notifications/SupabaseRealtimeNotificationService.cs
+@@ -0,0 +1,27 @@
++using SmartPay.Api.Notifications;
++
++namespace SmartPay.Infrastructure.Notifications;
++
++/// <summary>
++/// Placeholder for WP5: Wire to Supabase Realtime channels per tenant.
++/// </summary>
++internal sealed class SupabaseRealtimeNotificationService : INotificationService
++{
++    public Task PublishAsync(string tenantId, string topic, object payload, CancellationToken ct = default)
++    {
++        // TODO: publish to Supabase channel: $"tenant::{tenantId}:{topic}"
++        return Task.CompletedTask;
++    }
++}
+diff --git a/.gitignore b/.gitignore
+index 7f8a9b2..a3d4c10 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,9 @@
++
++# WP4 local settings (do not commit real values)
++ZEN/SOURCE/Api/appsettings.WP4.json
++ANALYSIS/PERF/results/
++ANALYSIS/PERF/**/*.tmp
++
+ # Build results
+ bin/
+ obj/
