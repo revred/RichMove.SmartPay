@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using RichMove.SmartPay.Core.Observability;
 
 namespace RichMove.SmartPay.Api.Security;
 
@@ -47,7 +48,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
 
     public async Task<SecurityCheckResult> ValidateRequestAsync(HttpContext context)
     {
-        using var activity = Activity.Current?.Source?.StartActivity("ApiSecurityValidation");
+        using var activity = SmartPayTracing.Source.StartActivity("ApiSecurityValidation");
         var stopwatch = Stopwatch.StartNew();
 
         try

@@ -202,7 +202,7 @@ public sealed partial class CleanupBackgroundService : BackgroundService
         }
     }
 
-    private async Task CleanupRateLimitCounters(CancellationToken cancellationToken)
+    private Task CleanupRateLimitCounters(CancellationToken cancellationToken)
     {
         using var scope = _services.CreateScope();
         var rateLimitCounters = scope.ServiceProvider.GetService<RateLimitCounters>();
@@ -211,12 +211,12 @@ public sealed partial class CleanupBackgroundService : BackgroundService
         {
             // Rate limit counters are already self-cleaning via time windows
             // This is a placeholder for future enhancements
-            await Task.CompletedTask;
             Log.RateLimitCountersCleanup(_logger);
         }
+        return Task.CompletedTask;
     }
 
-    private async Task CleanupMemoryPools(CancellationToken cancellationToken)
+    private Task CleanupMemoryPools(CancellationToken cancellationToken)
     {
         using var scope = _services.CreateScope();
         var memoryPoolManager = scope.ServiceProvider.GetService<MemoryPoolManager>();
@@ -229,11 +229,11 @@ public sealed partial class CleanupBackgroundService : BackgroundService
             Log.MemoryPoolStats(_logger, stats.OutstandingByteArrays, stats.OutstandingCharArrays, stats.OutstandingObjects);
 
             // Memory pools are self-managing, but we can log stats for monitoring
-            await Task.CompletedTask;
         }
+        return Task.CompletedTask;
     }
 
-    private async Task CleanupColdStartTracker(CancellationToken cancellationToken)
+    private Task CleanupColdStartTracker(CancellationToken cancellationToken)
     {
         using var scope = _services.CreateScope();
         var coldStartTracker = scope.ServiceProvider.GetService<ColdStartTracker>();
@@ -242,9 +242,9 @@ public sealed partial class CleanupBackgroundService : BackgroundService
         {
             // Cold start tracker is stateless after completion
             // This could be extended to reset tracking in test scenarios
-            await Task.CompletedTask;
             Log.ColdStartTrackerCleanup(_logger);
         }
+        return Task.CompletedTask;
     }
 
     private async Task ForceGarbageCollection(CancellationToken cancellationToken)

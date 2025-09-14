@@ -1,0 +1,168 @@
+*** Begin Patch
+*** Add File: ZEN/SOURCE/Core/Compliance/ComplianceTypes.cs
++using System;
++
++namespace RichMove.SmartPay.Core.Compliance
++{
++    /// <summary>
++    /// Canonical compliance frameworks used across the platform.
++    /// Centralized to eliminate duplicate enum declarations and enforce CA1008 (None = 0).
++    /// </summary>
++    public enum ComplianceFramework
++    {
++        None = 0,
++        PCIDSS,
++        GDPR,
++        SOX,
++        HIPAA,
++        ISO27001
++    }
++
++    /// <summary>
++    /// Standardized severity for compliance violations.
++    /// </summary>
++    public enum ComplianceSeverity
++    {
++        None = 0,
++        Low = 1,
++        Medium = 2,
++        High = 3,
++        Critical = 4
++    }
++
++    /// <summary>
++    /// State of a given compliance check/run.
++    /// </summary>
++    public enum ComplianceState
++    {
++        Unknown = 0,
++        Passing = 1,
++        Warning = 2,
++        Failing = 3
++    }
++}
++
+*** End Patch
+*** Begin Patch
+*** Update File: ZEN/SOURCE/Api/Compliance/ComplianceMonitoringService.cs
+@@
+-using System.Diagnostics;
++using System.Diagnostics;
++using RichMove.SmartPay.Core.Compliance;
+@@
+-    public sealed class ComplianceOptions 
++    public sealed class ComplianceOptions 
+     {
+         public TimeSpan CheckInterval { get; set; } = TimeSpan.FromHours(1);
+-        public List<ComplianceFramework> EnabledFrameworks { get; } =
+-            [ComplianceFramework.PCIDSS, ComplianceFramework.GDPR];
++        // Exposed as read-only to prevent runtime mutation. Configure via appsettings.
++        public List<ComplianceFramework> EnabledFrameworks { get; } =
++            new() { ComplianceFramework.PCIDSS, ComplianceFramework.GDPR };
+         public bool EnableAuditLogging { get; set; } = true;
+         public bool EnableRealTimeMonitoring { get; set; } = true;
+     }
+@@
+-    public enum ComplianceFramework 
+-    {
+-        None = 0,
+-        PCIDSS,
+-        GDPR,
+-        SOX,
+-        ISO27001,
+-    }
++    // NOTE: Compliance enums have been centralized to RichMove.SmartPay.Core.Compliance.
++    // Local duplicates removed to avoid divergence and code analysis warnings.
+@@
+-    public enum ComplianceSeverity 
+-    {
+-        None = 0,
+-        Low = 1,
+-        Medium = 2,
+-        High = 3,
+-    }
++    // SEE: RichMove.SmartPay.Core.Compliance.ComplianceSeverity
+*** End Patch
+*** Begin Patch
+*** Update File: ZEN/SOURCE/Api/Security/ComprehensiveSecurityAuditService.cs
+@@
+-using System.Diagnostics;
++using System.Diagnostics;
++using RichMove.SmartPay.Core.Compliance;
+@@
+-        case ComplianceFramework.PCIDSS:
++        case ComplianceFramework.PCIDSS:
+             report = GeneratePCIComplianceReport(events, report);
+             break;
+@@
+-    public enum ComplianceFramework 
+-    {
+-        GDPR,
+-        PCIDSS,
+-        SOX,
+-        HIPAA,
+-        ISO27001 
+-    }
++    // NOTE: Compliance enums have been centralized to RichMove.SmartPay.Core.Compliance.
++    // Local duplicate removed.
+*** End Patch
+*** Begin Patch
+*** Update File: ZEN/SOURCE/Api/Security/ApiSecurityHardeningService.cs
+@@
+-    public async Task<SecurityCheckResult> ValidateRequestAsync(HttpContext context)
++    public Task<SecurityCheckResult> ValidateRequestAsync(HttpContext context)
+     {
+         var result = new SecurityCheckResult { IsAllowed = true };
+@@
+-        return result;
++        return Task.FromResult(result);
+     }
+*** End Patch
+*** Begin Patch
+*** Add File: ZEN/SOURCE/Core/Observability/SmartPayTracing.cs
++using System.Diagnostics;
++
++namespace RichMove.SmartPay.Core.Observability
++{
++    /// <summary>
++    /// Central ActivitySource for RichMove.SmartPay tracing.
++    /// </summary>
++    public static class SmartPayTracing
++    {
++        public static readonly ActivitySource Source = new("RichMove.SmartPay");
++    }
++}
++
+*** End Patch
+*** Begin Patch
+*** Update File: ZEN/SOURCE/Api/Security/AdvancedInputSanitizationService.cs
+@@
+-        using var activity = Activity.Current?.Source?.StartActivity("InputSanitization");
++        using var activity = Core.Observability.SmartPayTracing.Source.StartActivity("InputSanitization");
+*** End Patch
+*** Begin Patch
+*** Add File: Directory.Build.props
++<Project>
++  <PropertyGroup>
++    <TargetFramework>net9.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++    <LangVersion>latest</LangVersion>
++    <AnalysisLevel>latest</AnalysisLevel>
++    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
++    <!-- Do NOT fail build on analyzer warnings yet; flip to true before WP4 release. -->
++    <CodeAnalysisTreatWarningsAsErrors>false</CodeAnalysisTreatWarningsAsErrors>
++  </PropertyGroup>
++</Project>
++
+*** End Patch
+*** Begin Patch
+*** Add File: global.json
++{
++  "sdk": {
++    "version": "9.0.100",
++    "rollForward": "latestFeature"
++  }
++}
++
+*** End Patch

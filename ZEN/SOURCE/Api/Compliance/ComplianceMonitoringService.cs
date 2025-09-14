@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Diagnostics.Metrics;
+using RichMove.SmartPay.Core.Compliance;
 
 namespace RichMove.SmartPay.Api.Compliance;
 
@@ -144,7 +145,7 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
                 _complianceViolations.Add(violations.Count,
                     new KeyValuePair<string, object?>("framework", framework.ToString()));
 
-                await LogComplianceViolations(framework, violations);
+                LogComplianceViolations(framework, violations);
             }
 
             Log.FrameworkComplianceChecked(_logger, framework.ToString(), violations.Count);
@@ -421,7 +422,7 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
         return Random.Shared.Next(100) > 5; // 95% compliance rate
     }
 
-    private async Task LogComplianceViolations(ComplianceFramework framework, List<ComplianceViolation> violations)
+    private void LogComplianceViolations(ComplianceFramework framework, List<ComplianceViolation> violations)
     {
         foreach (var violation in violations)
         {
@@ -443,7 +444,6 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
                 new KeyValuePair<string, object?>("severity", violation.Severity.ToString()));
         }
 
-        await Task.CompletedTask;
     }
 
     private async Task ProcessAuditEventQueue()
@@ -592,32 +592,6 @@ public sealed class ComplianceOptions
     public bool EnableRealTimeMonitoring { get; set; } = true;
 }
 
-public enum ComplianceFramework
-{
-    None = 0,
-    PCIDSS,
-    GDPR,
-    SOX,
-    ISO27001,
-    NIST
-}
-
-public enum ComplianceState
-{
-    Unknown,
-    Compliant,
-    NonCompliant,
-    Error
-}
-
-public enum ComplianceSeverity
-{
-    None = 0,
-    Low = 1,
-    Medium = 2,
-    High = 3,
-    Critical = 4
-}
 
 public sealed class ComplianceStatus
 {

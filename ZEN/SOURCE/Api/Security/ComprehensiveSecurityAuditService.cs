@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using RichMove.SmartPay.Core.Observability;
 
 namespace RichMove.SmartPay.Api.Security;
 
@@ -605,7 +606,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         var processedCount = 0;
         var events = new List<ComprehensiveAuditEvent>();
 
-        using var activity = Activity.Current?.Source?.StartActivity("ProcessAuditEvents");
+        using var activity = SmartPayTracing.Source.StartActivity("ProcessAuditEvents");
         var stopwatch = Stopwatch.StartNew();
 
         try

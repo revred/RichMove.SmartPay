@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using RichMove.SmartPay.Core.Observability;
 
 namespace RichMove.SmartPay.Api.Security;
 
@@ -58,7 +59,7 @@ public sealed class ContentSecurityPolicyService : IHostedService, IDisposable
 
     public string GeneratePolicy(HttpContext context, CspMode mode = CspMode.Enforce)
     {
-        using var activity = Activity.Current?.Source?.StartActivity("GenerateCSPPolicy");
+        using var activity = SmartPayTracing.Source.StartActivity("GenerateCSPPolicy");
         var stopwatch = Stopwatch.StartNew();
 
         try

@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Web;
 using Microsoft.Extensions.Options;
+using RichMove.SmartPay.Core.Observability;
 
 namespace RichMove.SmartPay.Api.Security;
 
@@ -60,7 +61,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
 
     public async Task<SanitizationResult> SanitizeAsync(string input, SanitizationContext context)
     {
-        using var activity = Activity.Current?.Source?.StartActivity("InputSanitization");
+        using var activity = SmartPayTracing.Source.StartActivity("InputSanitization");
         var stopwatch = Stopwatch.StartNew();
 
         try
