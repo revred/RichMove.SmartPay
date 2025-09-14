@@ -1,0 +1,17 @@
+# Reports Directory
+
+This directory contains automatically generated regression test reports and coverage analysis.
+
+Reports are automatically archived weekly and deleted after 30 days to manage disk space.
+
+## Report Types
+
+- `validation-report-*.json`: Feature validation results
+- `coverage-report-*.json`: Test coverage analysis
+- `.archiver-status`: Last archival run status
+
+## Cleanup Schedule
+
+- **Weekly**: Reports older than 7 days moved to `archive/`
+- **Monthly**: Archived reports older than 30 days deleted
+- **On-demand**: Run `../automation/report-archiver.ps1` manually
