@@ -13,6 +13,7 @@ using RichMove.SmartPay.Api.Performance;
 using RichMove.SmartPay.Api.Resilience;
 using RichMove.SmartPay.Api.Security;
 using RichMove.SmartPay.Api.Services;
+using RichMove.SmartPay.Api.Validation;
 using RichMove.SmartPay.Core.Blockchain;
 using RichMove.SmartPay.Core.Time;
 using RichMove.SmartPay.Infrastructure.Blockchain;
@@ -52,6 +53,10 @@ public static partial class SmartPayHardeningExtensions
         services.AddSingleton<ClientRateLimiter>();
         services.AddSingleton<AuditLogger>();
 
+        // Validation services (MVP-essential)
+        services.AddScoped<AsyncValidationService>();
+        services.Configure<InputValidationOptions>(config.GetSection("InputValidation"));
+
         // Resilience services
         services.AddSingleton<CircuitBreakerService>();
 
@@ -87,6 +92,9 @@ public static partial class SmartPayHardeningExtensions
 
         // Idempotency for POST/PUT/PATCH endpoints
         app.UseMiddleware<IdempotencyMiddleware>();
+
+        // Input validation (MVP-essential)
+        app.UseMiddleware<InputValidationMiddleware>();
 
         // Blockchain binding by feature flag
         var flags = app.ApplicationServices.GetRequiredService<IOptions<FeatureFlags>>().Value;
