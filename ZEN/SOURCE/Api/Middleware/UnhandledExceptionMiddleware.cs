@@ -27,19 +27,23 @@ public sealed partial class UnhandledExceptionMiddleware
         catch (Exception ex)
         {
             Log.UnhandledException(_logger, ex);
-            context.Response.ContentType = "application/problem+json";
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
-            var problem = new
+            if (!context.Response.HasStarted)
             {
-                type = "about:blank/unhandled",
-                title = "Unhandled error",
-                status = context.Response.StatusCode,
-                detail = "An unexpected error occurred.",
-                traceId = context.TraceIdentifier
-            };
+                context.Response.ContentType = "application/problem+json";
+                context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+                var problem = new
+                {
+                    type = "about:blank/unhandled",
+                    title = "Unhandled error",
+                    status = context.Response.StatusCode,
+                    detail = "An unexpected error occurred.",
+                    traceId = context.TraceIdentifier
+                };
+
+                await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
+            }
         }
     }
 
