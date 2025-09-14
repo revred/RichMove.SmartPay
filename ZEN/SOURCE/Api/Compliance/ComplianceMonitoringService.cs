@@ -114,7 +114,7 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
         {
             switch (framework)
             {
-                case ComplianceFramework.PCI_DSS:
+                case ComplianceFramework.PCIDSS:
                     violations.AddRange(await CheckPciDssCompliance());
                     break;
 
@@ -586,15 +586,16 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
 public sealed class ComplianceOptions
 {
     public TimeSpan CheckInterval { get; set; } = TimeSpan.FromHours(1);
-    public List<ComplianceFramework> EnabledFrameworks { get; set; } =
-        [ComplianceFramework.PCI_DSS, ComplianceFramework.GDPR];
+    public List<ComplianceFramework> EnabledFrameworks { get; } =
+        [ComplianceFramework.PCIDSS, ComplianceFramework.GDPR];
     public bool EnableAuditLogging { get; set; } = true;
     public bool EnableRealTimeMonitoring { get; set; } = true;
 }
 
 public enum ComplianceFramework
 {
-    PCI_DSS,
+    None = 0,
+    PCIDSS,
     GDPR,
     SOX,
     ISO27001,
@@ -611,6 +612,7 @@ public enum ComplianceState
 
 public enum ComplianceSeverity
 {
+    None = 0,
     Low = 1,
     Medium = 2,
     High = 3,

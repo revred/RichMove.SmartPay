@@ -211,7 +211,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
             case ComplianceFramework.GDPR:
                 report = GenerateGDPRComplianceReport(events, report);
                 break;
-            case ComplianceFramework.PCI_DSS:
+            case ComplianceFramework.PCIDSS:
                 report = GeneratePCIComplianceReport(events, report);
                 break;
             case ComplianceFramework.SOX:
@@ -824,7 +824,7 @@ public enum AuditSeverity
 public enum ComplianceFramework
 {
     GDPR,
-    PCI_DSS,
+    PCIDSS,
     SOX,
     HIPAA,
     ISO27001
