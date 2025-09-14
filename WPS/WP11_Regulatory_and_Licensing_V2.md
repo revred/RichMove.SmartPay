@@ -54,6 +54,28 @@ Establishes comprehensive regulatory compliance framework, licensing requirement
 - **Upstream**: WP04 (Payment Orchestrator), WP05 (FX and Remittance SPI), WP10 (Quality CI/CD and Testing)
 - **Downstream**: WP12 (Partner Integrations and GTM)
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E9.F1 | Regulatory Compliance Framework | SMK-E9-COMPLIANCE, INTEG-E9-JURISDICTION, AUDIT-E9-TRAIL | /compliance/framework/, /compliance/jurisdictions/, /audit/trails/ |
+| E9.F2 | Financial Services Licensing | SMK-E9-LICENSE, INTEG-E9-AML, COMP-E9-PSP | /licensing/requirements/, /compliance/aml/, /licensing/psp/ |
+| E9.F3 | Data Protection and Privacy | SMK-E9-GDPR, INTEG-E9-CCPA, COMP-E9-PRIVACY | /privacy/gdpr/, /privacy/ccpa/, /privacy/assessments/ |
+| E9.F4 | Audit and Reporting | SMK-E9-REPORTING, INTEG-E9-DASHBOARD, AUDIT-E9-FILING | /audit/reports/, /audit/dashboard/, /audit/filings/ |
+
+### Acceptance
+- All regulatory compliance requirements met for target jurisdictions
+- Money transmitter and PSP licensing requirements satisfied
+- GDPR and CCPA compliance verified through third-party audit
+- Automated regulatory reporting functional and accurate
+- Audit trails complete and accessible for regulatory review
+
+### Rollback
+- Disable new compliance features while maintaining existing compliance posture
+- Revert to manual compliance processes if automated systems fail
+- Maintain existing licensing status and regulatory relationships
+- Preserve audit trails and documentation for regulatory continuity
+
 ### Risk Assessment
 - **Technical Risk**: MEDIUM (regulatory complexity)
 - **Business Risk**: CRITICAL (regulatory violations)

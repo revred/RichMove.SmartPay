@@ -55,6 +55,26 @@ Enhances the existing CI/CD pipeline with advanced quality assurance, comprehens
 - **Upstream**: WP01 (Repository & Tooling), WP09 (Security and Compliance Controls)
 - **Downstream**: WP11 (Regulatory and Licensing)
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E6.F1 | Advanced Testing Strategy | SMK-E6-COVERAGE, INTEG-E6-MUTATION, PERF-E6-REGRESSION | /tests/coverage/, /tests/mutation/, /tests/performance/ |
+| E6.F2 | Developer Experience Tools | SMK-E6-IDE, INTEG-E6-CODEGEN, FUNC-E6-ONBOARD | /tools/ide-extensions/, /tools/codegen/, /docs/onboarding/ |
+| E6.F3 | Quality Assurance | SMK-E6-STATIC, INTEG-E6-SECURITY, COMP-E6-COMPLIANCE | /qa/static-analysis/, /qa/security-scan/, /qa/compliance/ |
+
+### Acceptance
+- All CI/CD pipelines pass with >95% test coverage and quality gates
+- Developer onboarding time reduced to <30 minutes with tooling
+- IDE extensions functional across VS Code, Visual Studio, and Rider
+- Documentation automatically updated and current
+
+### Rollback
+- Revert to previous CI/CD pipeline configuration with basic quality gates
+- Disable advanced testing features while maintaining core functionality
+- Rollback IDE extensions to previous stable versions
+- Maintain existing documentation until issues resolved
+
 ### Risk Assessment
 - **Technical Risk**: LOW (extension of existing capabilities)
 - **Business Risk**: LOW (developer productivity impact)

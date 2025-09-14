@@ -54,6 +54,21 @@ Establishes comprehensive security controls, compliance frameworks, and threat d
 - **Upstream**: WP01 (Repository & Tooling), WP08 (Analytics and Reporting)
 - **Downstream**: WP10 (Quality CI/CD and Testing)
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E5.F1 | Security Framework | SMK-E5-Security, SEC-E5-Policy | Security tests (Framework) |
+| E5.F2 | Secret Management | SMK-E5-Secrets, SEC-E5-Scan | Secret scanning tests |
+| E5.F3 | Vulnerability Mgmt | SMK-E5-Vuln, SEC-E5-Assess | Vulnerability assessments |
+| E5.F4 | Security Monitoring | SMK-E5-Monitor, SEC-E5-SOC | SOC monitoring tests |
+
+### Acceptance
+- Security policies enforced; secrets properly managed; vulnerabilities remediated; monitoring operational.
+
+### Rollback
+- Disable enhanced security features; fallback to basic security controls.
+
 ### Risk Assessment
 - **Technical Risk**: HIGH (security complexity)
 - **Business Risk**: CRITICAL (regulatory and reputation impact)

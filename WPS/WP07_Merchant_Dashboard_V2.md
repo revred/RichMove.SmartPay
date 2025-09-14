@@ -61,6 +61,21 @@ Extends the Blazor SSR application with comprehensive merchant-facing administra
 - **Upstream**: WP06 (Checkout UI and SDKs)
 - **Downstream**: WP08 (Analytics and Reporting)
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E7.F3 | KPI Dashboard | SMK-E7-KPI, PERF-E7-Dash | Smoke_Features.md §3.7-C/D |
+| E7.F4 | CRUD Operations | SMK-E7-CRUD, INTEG-E7-Data | Integration tests (CRUD) |
+| E7.F5 | Access Control | SMK-E7-RBAC, SEC-E7-Auth | Security tests (RBAC) |
+| E7.F6 | Bulk Operations | SMK-E7-Bulk, LOAD-E7-Batch | Performance tests |
+
+### Acceptance
+- KPI dashboard updates real-time; CRUD operations functional; role-based access enforced.
+
+### Rollback
+- Disable advanced features; fallback to basic admin interface.
+
 ### Risk Assessment
 - **Technical Risk**: MEDIUM (complex UI interactions)
 - **Business Risk**: HIGH (operational efficiency impact)

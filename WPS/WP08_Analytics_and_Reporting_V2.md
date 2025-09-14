@@ -53,6 +53,21 @@ Implements comprehensive analytics infrastructure and reporting capabilities tha
 - **Upstream**: WP07 (Merchant Dashboard)
 - **Downstream**: WP09 (Security and Compliance Controls)
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E4.F2 | Analytics Collection | SMK-E4-Analytics, INTEG-E4-Metrics | Smoke_Features.md §3.8-A/B |
+| E6.F2 | Operational Metrics | SMK-E6-Metrics, PERF-E6-Monitor | Performance tests |
+| E8.F1 | Reporting Engine | SMK-E8-Reports, LOAD-E8-Export | Load tests (Reporting) |
+| E8.F2 | Data Processing | SMK-E8-Pipeline, INTEG-E8-ETL | Integration tests (ETL) |
+
+### Acceptance
+- Analytics data collected and processed; reports generated successfully; metrics dashboards functional.
+
+### Rollback
+- Disable advanced analytics; fallback to basic metric collection.
+
 ### Risk Assessment
 - **Technical Risk**: MEDIUM (complex data processing)
 - **Business Risk**: MEDIUM (business intelligence dependency)

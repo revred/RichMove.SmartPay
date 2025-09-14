@@ -53,6 +53,29 @@ Enables partner ecosystem integration, go-to-market capabilities, and production
 - **Upstream**: WP04 (Payment Orchestrator), WP05 (FX and Remittance SPI), WP11 (Regulatory and Licensing)
 - **Downstream**: Production deployment and commercial operations
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E10.F1 | Partner Integration Framework | SMK-E10-API, INTEG-E10-PARTNER, FUNC-E10-ONBOARD | /partners/api/, /partners/integration/, /partners/onboarding/ |
+| E10.F2 | Production Hosting Infrastructure | SMK-E10-DEPLOY, INTEG-E10-SCALE, PERF-E10-AVAILABILITY | /infrastructure/deployment/, /infrastructure/scaling/, /infrastructure/monitoring/ |
+| E10.F3 | Go-to-Market Support | SMK-E10-PROVISION, INTEG-E10-BILLING, FUNC-E10-SUPPORT | /gtm/provisioning/, /gtm/billing/, /gtm/support/ |
+| E10.F4 | Cost Optimization | SMK-E10-SCALE-ZERO, INTEG-E10-SIZING, COST-E10-MONITOR | /optimization/scaling/, /optimization/sizing/, /optimization/monitoring/ |
+
+### Acceptance
+- Partner onboarding completed within 5-day target timeline
+- Production hosting infrastructure maintains 99.9% uptime SLA
+- Hosting costs remain below $50/month during idle periods
+- Partner API integration tests pass with 100% success rate
+- Go-to-market platform fully operational for commercial launch
+
+### Rollback
+- Revert to previous partner integration methods if new framework fails
+- Fallback to existing hosting infrastructure during deployment issues
+- Disable cost optimization features if they impact system stability
+- Maintain existing billing and support systems during transition
+- Preserve partner relationships and service continuity
+
 ### Risk Assessment
 - **Technical Risk**: MEDIUM (infrastructure complexity)
 - **Business Risk**: HIGH (go-to-market readiness)

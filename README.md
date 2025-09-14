@@ -13,8 +13,8 @@ This repository powers the SmartPay API and related admin/merchant UI.
 - **WP6**: UI & SDK plan (Blazor SSR + REST‑first SDKs). This commit adds **documentation only** for WP6.
 
 ## Quick Links
-- **WP4**: `WPS/WP4.md`
-- **WP6 Plan**: `WPS/WP6.md`
+- **WP4**: `WPS/WP04_Payment_Orchestrator_and_Connectors_V2.md`
+- **WP6 Plan**: `WPS/WP06_Checkout_UI_and_SDKs_V2.md`
 - **Blazor UI Plan**: `DOCS/UI/Blazor/Plan.md`
 - **Low‑Cost Azure Hosting**: `DOCS/Hosting/Azure.LowCost.md`
 - **SDK Consumption**: `DOCS/API/SDK-Consumption.md`

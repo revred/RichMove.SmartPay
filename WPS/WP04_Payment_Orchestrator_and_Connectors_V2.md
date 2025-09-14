@@ -252,6 +252,21 @@ public class FxQuoteTriggerMiddleware
 - **Upstream**: WP01 (Repository & Tooling), WP02 (Core Domain & Database), WP03 (API & Contracts)
 - **Downstream**: WP05 (FX & Remittance SPI), WP06 (Checkout UI & SDKs)
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E3.F1 | Multi-Factor Provider Selection | SMK-E3-Provider, LOAD-E3-Failover | Smoke_Features.md §3.4-A/B |
+| E4.F1 | Real-time Notifications | SMK-E4-SignalR, INTEG-E4-Realtime | Smoke_Features.md §3.4-C |
+| E4.F3 | Multi-tenancy Infrastructure | SMK-E4-Tenant, SEC-E4-Isolation | Integration tests (Tenancy) |
+| E4.F4 | Event-Driven Triggers | SMK-E4-Events, INTEG-E4-Triggers | Smoke_Features.md §3.4-D |
+
+### Acceptance
+- SignalR notifications delivered <500ms; tenant isolation enforced; events published on triggers.
+
+### Rollback
+- Disable real-time features via WP4 config; fallback to polling mode.
+
 ## Risk Assessment
 - **Technical Risk**: MEDIUM (complex real-time and multi-tenancy features)
 - **Business Risk**: HIGH (core user experience features)

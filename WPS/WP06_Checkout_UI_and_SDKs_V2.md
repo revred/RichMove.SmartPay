@@ -332,6 +332,21 @@ public class QuotesController : ControllerBase
 - **Upstream**: WP01 (Repository & Tooling), WP03 (API & Contracts), WP04 (Payment Orchestrator), WP05 (FX & Remittance SPI)
 - **Downstream**: WP07 (Merchant Dashboard), WP08 (Analytics & Reporting)
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E7.F1 | Blazor SSR UI | SMK-E7-Blazor, PERF-E7-TTFB | Smoke_Features.md §3.7-A/B |
+| E7.F2 | SDK Generation | SMK-E7-SDK, INTEG-E7-Client | Integration tests (SDK) |
+| E7.F3 | Real-time Updates | SMK-E7-SignalR, INTEG-E7-Live | Real-time tests |
+| E7.F4 | Performance Targets | PERF-E7-FCP, LOAD-E7-Scale | Performance tests |
+
+### Acceptance
+- Blazor UI renders <1.2s FCP; SDKs auto-generate from OpenAPI; real-time updates functional.
+
+### Rollback
+- Fallback to static HTML forms; API-only mode for SDK consumers.
+
 ## Risk Assessment
 - **Technical Risk**: MEDIUM (new Blazor SSR technology)
 - **Business Risk**: HIGH (core user interface)

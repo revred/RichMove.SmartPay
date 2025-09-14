@@ -141,8 +141,29 @@ Delivers outbound webhook infrastructure with HMAC signing and background retry 
 - **Supabase**: PostgreSQL database for RLS policy deployment
 - **External Endpoints**: HTTPS endpoints capable of receiving webhook payloads
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E5.F1 | Outbound Webhooks | SMK-E5-Webhook, INTEG-E5-HMAC | Smoke_Features.md §3.5-A/B |
+| E5.F2 | Background Retry Logic | SMK-E5-Retry, LOAD-E5-Queue | Integration tests (Webhook) |
+| E5.F3 | Tenant Data Isolation | SMK-E5-RLS, SEC-E5-Tenant | Security tests (RLS) |
+| E5.F4 | Composite Notifications | SMK-E5-Composite | Smoke_Features.md §3.5-C |
+
+### Acceptance
+- Webhooks delivered with HMAC signature; retry logic handles failures; RLS enforces tenant isolation.
+
+### Rollback
+- Disable webhook features via WP5 config; fallback to SignalR-only notifications.
+
 ## Future Enhancements (Out of Scope)
 - **Persistent Queue**: Database-backed webhook queue for durability (WP5.1)
 - **Dead Letter Queue**: Failed webhook storage and replay capabilities
 - **Webhook Dashboard**: UI for webhook endpoint management and monitoring
 - **Rate Limiting**: Per-endpoint throttling and circuit breaker patterns
+
+---
+**Status**: ✅ COMPLETED
+**Last Updated**: 2025-09-14
+**Owner**: Backend Team
+**Next Phase**: WP06 - Checkout UI and SDKs

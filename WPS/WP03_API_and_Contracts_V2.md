@@ -158,6 +158,21 @@ paths:
 - **Upstream**: WP01 (Repository & Tooling), WP02 (Core Domain & Database)
 - **Downstream**: WP04 (Payment Orchestrator), WP06 (Checkout UI & SDKs)
 
+## V&V {#vv}
+### Feature → Test mapping
+| Feature ID | Name | Test IDs | Evidence / Location |
+|-----------:|------|----------|---------------------|
+| E3.F1 | FX Quote API | SMK-E3-Quote-OK, SMK-E3-Quote-400 | Smoke_Features.md §3.3-A/B |
+| E3.F2 | API Documentation | SMK-E3-Swagger | Smoke_Features.md §3.3-C |
+| E3.F3 | Rate Retrieval | SMK-E3-Rates, PERF-E3-Response | Performance tests |
+| E3.F4 | Request Validation | SMK-E3-Validation, SEC-E3-Input | Security tests (Validation) |
+
+### Acceptance
+- FX quote returns valid JSON; invalid requests return RFC7807 errors; Swagger UI accessible.
+
+### Rollback
+- API versioning enables backward compatibility; gradual endpoint deprecation.
+
 ## Risk Assessment
 - **Technical Risk**: LOW (proven FastEndpoints framework)
 - **Business Risk**: HIGH (core business API)
