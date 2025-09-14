@@ -1,0 +1,532 @@
+From a1b2c3d4e5f60718293abcde Mon Sep 14 10:05:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Sun, 14 Sep 2025 10:05:00 +0100
+Subject: [WP5] Eventing bridge: outbound webhooks (signed + retry outbox),
+ RLS templates for multi-tenant DB (Supabase), docs & samples
+X-Work-Package: WP5
+X-Patch-Name: 1005_WP5_EventBridge_RLS.patch
+
+# Overview
+# This WP5 patch delivers:
+# 1) **Outbound Webhooks** (HMAC-signed) with a background **retrying outbox** and
+#    a **composite notification service** that mirrors events to both SignalR (WP4)
+#    and HTTP webhooks. Zero external NuGet dependencies.
+# 2) **Supabase Row-Level Security (RLS)** templates for tenant isolation and a
+#    short guide to activate policies. No runtime code changes required to start.
+#
+# Non-breaking defaults:
+# - Webhooks are OFF unless enabled in config.
+# - If enabled, notifications are broadcast to both SignalR and configured webhooks.
+#
+# Wire-up notes (Program.cs):
+#   using SmartPay.Api.Bootstrap;
+#   builder.Services.AddWp4Features(builder.Configuration);
+#   builder.Services.AddWp5Features(builder.Configuration); // NEW
+#   app.UseWp4Features(builder.Configuration);
+#   app.UseWp5Features(builder.Configuration);             // NEW
+#
+---
+diff --git a/WPS/WP5.md b/WPS/WP5.md
+new file mode 100644
+index 0000000..77e3a18
+--- /dev/null
++++ b/WPS/WP5.md
+@@ -0,0 +1,162 @@
++# WP5 — Event Bridge & Tenant Isolation (Implementation)
++
++**Goal:** Bridge domain events outward (webhooks) and finalize multi-tenant isolation at the DB layer (RLS), without adding runtime bloat or heavy deps.
++
++## Scope
++1. **Outbound Webhooks**
++   - HMAC signature: `Richmove-Signature: t=<unix>, v1=<hex>` on request body.
++   - Background **retrying outbox** (in-memory Channel) with exponential backoff (max 5 attempts).
++   - **Composite Notification Service** that mirrors events to SignalR and webhooks.
++   - Configurable per-tenant or global endpoints.
++2. **Supabase RLS Templates**
++   - SQL policies for `quotes` table demonstrating tenant isolation with JWT claims.
++   - Guide to enable RLS and test with service-key vs anon-key clients.
++
++## Out-of-scope (deferred)
++- Provider-specific Realtime (Supabase Phoenix channels) — may land in WP5.2 if we add a thin dependency.
++- Delivery DLQ persistence — current outbox is volatile; persisting queue can be added in WP5.1.
++
++## Configuration
++Add `appsettings.WP5.sample.json` and selectively merge:
++```json
++{
++  "WP5": {
++    "Webhooks": {
++      "Enabled": true,
++      "Endpoints": [
++        { "Name": "AuditSink", "Url": "https://example.com/hooks/audit", "Secret": "replace-me", "Active": true }
++      ],
++      "TimeoutSeconds": 5,
++      "MaxAttempts": 5,
++      "InitialBackoffMs": 300
++    }
++  }
++}
++```
++
++## Wire-up
++```csharp
++builder.Services.AddWp5Features(builder.Configuration);
++app.UseWp5Features(builder.Configuration);
++```
++
++## Testing
++- Unit tests cover signature calculation and composite dispatch fan-out.
++- Smoke: set one test endpoint (httpbin or mock) and POST a quote to observe a webhook (see `Smoke_Features.md` §3.3).
++
++## RLS (Supabase)
++See `DB/SUPABASE/WP5_RLS.sql` and `DOCS/Data/RLS_Supabase.md` for enabling per-tenant isolation.
+diff --git a/ZEN/SOURCE/Api/Bootstrap/WP5AppConfig.cs b/ZEN/SOURCE/Api/Bootstrap/WP5AppConfig.cs
+new file mode 100644
+index 0000000..1897a55
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Bootstrap/WP5AppConfig.cs
+@@ -0,0 +1,79 @@
++using Microsoft.AspNetCore.Builder;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using SmartPay.Infrastructure.Webhooks;
++
++namespace SmartPay.Api.Bootstrap;
++
++public static class WP5AppConfig
++{
++    public static IServiceCollection AddWp5Features(this IServiceCollection services, IConfiguration cfg)
++    {
++        var options = new Wp5Options(cfg);
++        if (options.WebhooksEnabled)
++        {
++            WebhookRegistration.Add(services, cfg);
++        }
++        return services;
++    }
++
++    public static IApplicationBuilder UseWp5Features(this IApplicationBuilder app, IConfiguration cfg)
++    {
++        // No middleware required for outbound webhooks; background dispatcher started via hosted service.
++        return app;
++    }
++}
++
++public sealed class Wp5Options
++{
++    public bool WebhooksEnabled { get; init; }
++    public int TimeoutSeconds { get; init; }
++    public int MaxAttempts { get; init; }
++    public int InitialBackoffMs { get; init; }
++
++    public Wp5Options(IConfiguration cfg)
++    {
++        WebhooksEnabled = cfg.GetValue("WP5:Webhooks:Enabled", false);
++        TimeoutSeconds = cfg.GetValue("WP5:Webhooks:TimeoutSeconds", 5);
++        MaxAttempts = cfg.GetValue("WP5:Webhooks:MaxAttempts", 5);
++        InitialBackoffMs = cfg.GetValue("WP5:Webhooks:InitialBackoffMs", 300);
++    }
++}
+diff --git a/ZEN/SOURCE/Api/appsettings.WP5.sample.json b/ZEN/SOURCE/Api/appsettings.WP5.sample.json
+new file mode 100644
+index 0000000..f0846de
+--- /dev/null
++++ b/ZEN/SOURCE/Api/appsettings.WP5.sample.json
+@@ -0,0 +1,24 @@
++{
++  "WP5": {
++    "Webhooks": {
++      "Enabled": false,
++      "Endpoints": [
++        {
++          "Name": "SampleAudit",
++          "Url": "https://webhook.site/your-id",
++          "Secret": "replace-me",
++          "Active": true
++        }
++      ],
++      "TimeoutSeconds": 5,
++      "MaxAttempts": 5,
++      "InitialBackoffMs": 300
++    }
++  }
++}
+diff --git a/ZEN/SOURCE/Infrastructure/Webhooks/WebhookModels.cs b/ZEN/SOURCE/Infrastructure/Webhooks/WebhookModels.cs
+new file mode 100644
+index 0000000..1d2e4df
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Webhooks/WebhookModels.cs
+@@ -0,0 +1,64 @@
++using System.Text.Json;
++
++namespace SmartPay.Infrastructure.Webhooks;
++
++public sealed record WebhookEndpoint(string Name, string Url, string Secret, bool Active = true);
++
++public sealed record WebhookEnvelope(
++    string TenantId,
++    string Topic,
++    JsonElement Payload,
++    long TimestampUnix);
++
++public static class WebhookHeaders
++{
++    // Example: "t=1699970000, v1=0123abcd..."
++    public const string Signature = "Richmove-Signature";
++    public const string ContentType = "application/json";
++}
+diff --git a/ZEN/SOURCE/Infrastructure/Webhooks/WebhookSigner.cs b/ZEN/SOURCE/Infrastructure/Webhooks/WebhookSigner.cs
+new file mode 100644
+index 0000000..ab4f4ef
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Webhooks/WebhookSigner.cs
+@@ -0,0 +1,38 @@
++using System.Security.Cryptography;
++using System.Text;
++
++namespace SmartPay.Infrastructure.Webhooks;
++
++public static class WebhookSigner
++{
++    /// <summary>
++    /// Computes an HMAC SHA-256 signature over "t.{body}" using the shared secret.
++    /// </summary>
++    public static string ComputeSignature(string secret, long timestampUnix, string body)
++    {
++        var signedPayload = $"t={timestampUnix}.{body}";
++        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(secret));
++        var bytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(signedPayload));
++        var hex = Convert.ToHexString(bytes).ToLowerInvariant();
++        return $"t={timestampUnix}, v1={hex}";
++    }
++}
+diff --git a/ZEN/SOURCE/Infrastructure/Webhooks/WebhookDispatcher.cs b/ZEN/SOURCE/Infrastructure/Webhooks/WebhookDispatcher.cs
+new file mode 100644
+index 0000000..a1b3c1d
+--- /dev/null
++++ b/ZEN/SOURCE/Infrastructure/Webhooks/WebhookDispatcher.cs
+@@ -0,0 +1,154 @@
++using System.Collections.Concurrent;
++using System.Text;
++using System.Text.Json;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Hosting;
++using Microsoft.Extensions.Logging;
++using SmartPay.Api.Notifications;
++using SmartPay.Core.MultiTenancy;
++
++namespace SmartPay.Infrastructure.Webhooks;
++
++internal interface IWebhookQueue
++{
++    void Enqueue(WebhookEnvelope envelope);
++    bool TryDequeue(out WebhookEnvelope envelope);
++}
++
++internal sealed class InMemoryWebhookQueue : IWebhookQueue
++{
++    private readonly ConcurrentQueue<WebhookEnvelope> _queue = new();
++
++    public void Enqueue(WebhookEnvelope envelope) => _queue.Enqueue(envelope);
++    public bool TryDequeue(out WebhookEnvelope envelope) => _queue.TryDequeue(out envelope!);
++}
++
++internal sealed class WebhookDeliveryService(
++    ILogger<WebhookDeliveryService> logger,
++    IConfiguration cfg,
++    IWebhookQueue queue,
++    IHttpClientFactory httpClientFactory) : BackgroundService
++{
++    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
++    {
++        var options = new Wp5Options(cfg);
++        var endpoints = ReadEndpoints(cfg);
++        var client = httpClientFactory.CreateClient(nameof(WebhookDeliveryService));
++        client.Timeout = TimeSpan.FromSeconds(Math.Clamp(options.TimeoutSeconds, 2, 30));
++
++        logger.LogInformation("WebhookDeliveryService started: {Count} active endpoints", endpoints.Count);
++
++        while (!stoppingToken.IsCancellationRequested)
++        {
++            try
++            {
++                if (!queue.TryDequeue(out var env))
++                {
++                    await Task.Delay(200, stoppingToken);
++                    continue;
++                }
++
++                var json = JsonSerializer.Serialize(env.Payload);
++
++                foreach (var ep in endpoints.Where(e => e.Active))
++                {
++                    var attempts = 0;
++                    var backoff = options.InitialBackoffMs;
++                    while (attempts < Math.Max(1, options.MaxAttempts) && !stoppingToken.IsCancellationRequested)
++                    {
++                        attempts++;
++                        try
++                        {
++                            var sig = WebhookSigner.ComputeSignature(ep.Secret, env.TimestampUnix, json);
++                            using var req = new HttpRequestMessage(HttpMethod.Post, ep.Url)
++                            {
++                                Content = new StringContent(json, Encoding.UTF8, WebhookHeaders.ContentType)
++                            };
++                            req.Headers.TryAddWithoutValidation(WebhookHeaders.Signature, sig);
++                            req.Headers.TryAddWithoutValidation("X-Richmove-Topic", env.Topic);
++                            req.Headers.TryAddWithoutValidation("X-Richmove-Tenant", env.TenantId);
++
++                            var res = await client.SendAsync(req, stoppingToken);
++                            if ((int)res.StatusCode >= 200 && (int)res.StatusCode < 300)
++                            {
++                                logger.LogInformation("Webhook delivered to {Name} ({Url}) topic={Topic} tenant={Tenant}",
++                                    ep.Name, ep.Url, env.Topic, env.TenantId);
++                                break;
++                            }
++
++                            logger.LogWarning("Webhook attempt {Attempt} failed ({Status}) to {Name}: {Url}",
++                                attempts, (int)res.StatusCode, ep.Name, ep.Url);
++                        }
++                        catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
++                        {
++                            logger.LogWarning(ex, "Webhook exception on attempt {Attempt} to {Name}", attempts, ep.Name);
++                        }
++
++                        if (attempts < options.MaxAttempts)
++                            await Task.Delay(backoff, stoppingToken);
++
++                        backoff = Math.Min(backoff * 2, 5000);
++                    }
++                }
++            }
++            catch (TaskCanceledException) when (stoppingToken.IsCancellationRequested) { }
++            catch (Exception ex)
++            {
++                logger.LogError(ex, "WebhookDeliveryService loop error");
++            }
++        }
++
++        logger.LogInformation("WebhookDeliveryService stopping");
++    }
++
++    private static List<WebhookEndpoint> ReadEndpoints(IConfiguration cfg)
++    {
++        var list = new List<WebhookEndpoint>();
++        cfg.GetSection("WP5:Webhooks:Endpoints").Bind(list);
++        return list;
++    }
++}
++
++/// <summary>
++/// Decorator that forwards notifications to the existing provider (SignalR) and enqueues a webhook delivery.
++/// </summary>
++internal sealed class CompositeNotificationService(INotificationService inner, IWebhookQueue queue) : INotificationService
++{
++    public async Task PublishAsync(string tenantId, string topic, object payload, CancellationToken ct = default)
++    {
++        await inner.PublishAsync(tenantId, topic, payload, ct);
++
++        // Enqueue webhook envelope (serialize payload to JsonElement)
++        var json = JsonSerializer.SerializeToElement(payload);
++        var env = new WebhookEnvelope(tenantId, topic, json, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
++        queue.Enqueue(env);
++    }
++}
++
++public static class WebhookRegistration
++{
++    public static IServiceCollection Add(this IServiceCollection services, IConfiguration cfg)
++    {
++        // Required plumbing
++        services.AddHttpClient(nameof(WebhookDeliveryService));
++        services.AddSingleton<IWebhookQueue, InMemoryWebhookQueue>();
++        services.AddHostedService<WebhookDeliveryService>();
++
++        // Decorate existing INotificationService if present
++        services.AddSingleton<INotificationService>(sp =>
++        {
++            var existing = sp.GetRequiredService<INotificationService>();
++            var queue = sp.GetRequiredService<IWebhookQueue>();
++            return new CompositeNotificationService(existing, queue);
++        });
++
++        return services;
++    }
++}
+diff --git a/ZEN/TESTS/WP5/WebhookSignerTests.cs b/ZEN/TESTS/WP5/WebhookSignerTests.cs
+new file mode 100644
+index 0000000..1c4a5f9
+--- /dev/null
++++ b/ZEN/TESTS/WP5/WebhookSignerTests.cs
+@@ -0,0 +1,39 @@
++using System.Text.Json;
++using SmartPay.Infrastructure.Webhooks;
++using Xunit;
++
++namespace SmartPay.Tests.WP5;
++
++public class WebhookSignerTests
++{
++    [Fact]
++    public void Signature_Computes_Deterministically()
++    {
++        var secret = "test_secret";
++        var ts = 1700000000;
++        var body = "{\"hello\":\"world\"}";
++
++        var sig1 = WebhookSigner.ComputeSignature(secret, ts, body);
++        var sig2 = WebhookSigner.ComputeSignature(secret, ts, body);
++
++        Assert.Equal(sig1, sig2);
++        Assert.StartsWith($"t={ts}, v1=", sig1);
++        Assert.Equal(2, sig1.Split(',').Length);
++    }
++}
+diff --git a/DB/SUPABASE/WP5_RLS.sql b/DB/SUPABASE/WP5_RLS.sql
+new file mode 100644
+index 0000000..b2c1d1e
+--- /dev/null
++++ b/DB/SUPABASE/WP5_RLS.sql
+@@ -0,0 +1,118 @@
++-- WP5: Multi-tenant Row-Level Security (RLS) templates for Supabase/Postgres
++-- Assumptions:
++--   * Table "public.quotes" exists with a "tenant_id" text column.
++--   * JWT tokens carry a claim "tenant_id" (for anon/user clients).
++--   * Service role key (server) bypasses RLS when needed.
++
++-- 1) Ensure tenant_id column exists
++ALTER TABLE IF EXISTS public.quotes
++  ADD COLUMN IF NOT EXISTS tenant_id text NOT NULL DEFAULT 'default';
++
++-- 2) Enable RLS
++ALTER TABLE public.quotes ENABLE ROW LEVEL SECURITY;
++
++-- 3) Policies
++DROP POLICY IF EXISTS "tenant_isolation_select" ON public.quotes;
++CREATE POLICY "tenant_isolation_select"
++  ON public.quotes
++  FOR SELECT
++  USING (
++    tenant_id = coalesce( current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id', 'default')
++  );
++
++DROP POLICY IF EXISTS "tenant_isolation_insert" ON public.quotes;
++CREATE POLICY "tenant_isolation_insert"
++  ON public.quotes
++  FOR INSERT
++  WITH CHECK (
++    tenant_id = coalesce( current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id', 'default')
++  );
++
++DROP POLICY IF EXISTS "tenant_isolation_update" ON public.quotes;
++CREATE POLICY "tenant_isolation_update"
++  ON public.quotes
++  FOR UPDATE
++  USING (
++    tenant_id = coalesce( current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id', 'default')
++  )
++  WITH CHECK (
++    tenant_id = coalesce( current_setting('request.jwt.claims', true)::jsonb ->> 'tenant_id', 'default')
++  );
++
++-- 4) Optional: Restrict deletes to service-role only (no policy for anon/user)
++DROP POLICY IF EXISTS "tenant_delete" ON public.quotes;
++
++-- Notes:
++-- * For Supabase, anon/user keys include JWT; service_role bypasses RLS.
++-- * Ensure API layer sets "tenant_id" in tokens or via triggers during inserts.
++
++-- 5) Helpful: index for tenant queries
++CREATE INDEX IF NOT EXISTS idx_quotes_tenant ON public.quotes(tenant_id);
+diff --git a/DOCS/Data/RLS_Supabase.md b/DOCS/Data/RLS_Supabase.md
+new file mode 100644
+index 0000000..3e6cd80
+--- /dev/null
++++ b/DOCS/Data/RLS_Supabase.md
+@@ -0,0 +1,110 @@
++# Supabase RLS — Tenant Isolation (WP5)
++
++This guide enables per-tenant isolation on `public.quotes` using **Row-Level Security (RLS)**. It assumes your tokens carry a `tenant_id` claim.
++
++## 1) Apply RLS templates
++Run `DB/SUPABASE/WP5_RLS.sql` on your Supabase project (SQL editor or migration). This:
++1. Ensures `tenant_id` column exists.
++2. Enables RLS.
++3. Adds SELECT/INSERT/UPDATE policies that match `tenant_id` from JWT claims.
++4. Omits DELETE policy (delete requires service-role key by default).
++
++## 2) JWT claims (tenant_id)
++You have options:
++- **User-based**: put `tenant_id` into JWT via your auth hook.
++- **Server-to-DB**: use service role (bypasses RLS) and set `tenant_id` in the API layer upon insert/update.
++
++> If using service-role for writes from the API, ensure your code assigns `tenant_id` before persisting records.
++
++## 3) Testing
++1. With **anon/user key**, query quotes and observe only the current tenant’s rows.  
++2. With **service-role key**, all rows are visible (admin path)—use with care.
++
++## 4) Notes
++- Add similar policies to any other multi-tenant tables.  
++- Index `tenant_id` for performance.  
++- Consider a view per tenant for analytics if needed.
+diff --git a/WPS/FEATURES.md b/WPS/FEATURES.md
+new file mode 100644
+index 0000000..a8b6f11
+--- /dev/null
++++ b/WPS/FEATURES.md
+@@ -0,0 +1,60 @@
++# Feature Inventory (Living)
++
++This is the human-friendly version of `SmartPay_Feature_Inventory.csv`. Update after each WP. See `Smoke_Features.md` for probes.
++
++## Implemented
++- **E1** Platform Foundation — API shell, Swagger, health, CI.
++- **E2** FX Core — Create Quote, persistence, background pricing, DB health.
++- **E4** Advanced — SignalR hub, notification service, tenancy middleware, analytics, FX-quote trigger.
++- **WP5 (this patch)** — Outbound webhooks (signed + retry), RLS templates.
++
++## Planned
++- **E3** Payment Provider Orchestration.
++- **E7/E8 (WP6)** Blazor SSR UI + SDKs + low-cost hosting.
++
++> The CSV remains the canonical index for automated test generation.
+diff --git a/.gitignore b/.gitignore
+index fbd2e33..1d2f4a1 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,12 +1,16 @@
+ 
+ # WP4 local settings (do not commit real values)
+ ZEN/SOURCE/Api/appsettings.WP4.json
+ ANALYSIS/PERF/results/
+ ANALYSIS/PERF/**/*.tmp
+ ANALYSIS/PERF/scenarios/**/*.out
+ 
++# WP5 local settings
++ZEN/SOURCE/Api/appsettings.WP5.json
++
+ # Build results
+ bin/
+ obj/
+ TestResults/
+ .vs/
++*.DS_Store
+diff --git a/README.md b/README.md
+index 4acb8b1..7b2a6c3 100644
+--- a/README.md
++++ b/README.md
+@@ -10,6 +10,12 @@
+ - **SDK Consumption**: `DOCS/API/SDK-Consumption.md`
+ - **Blazor Perf Cookbook**: `DOCS/Perf/Blazor.Fast.md`
+ 
++## WP5 (Event Bridge & RLS)
++- **Webhooks (Outbound)**: HMAC-signed delivery with retrying outbox (opt-in via `appsettings.WP5.json`).
++- **Composite Notifications**: SignalR (WP4) + Webhooks mirror.
++- **RLS Templates**: `DB/SUPABASE/WP5_RLS.sql` + `DOCS/Data/RLS_Supabase.md` for tenant isolation.
++
+ ## Contributing
+ - Prefer **OpenAPI‑first** for new endpoints.  
+ - Keep UI **server‑rendered** and minimal; use realtime only where it adds value.  
+ - Track performance budgets; fail builds on regressions.

@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Npgsql;
 using RichMove.SmartPay.Api.Extensions;
 using RichMove.SmartPay.Api.Health;
+using SmartPay.Api.Bootstrap;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -63,11 +64,23 @@ builder.Services.AddControllers();
 // WP3: Platform Hardening (flags, correlation, idempotency, problem details)
 builder.Services.AddSmartPayPlatformHardening(builder.Configuration);
 
+// WP4: Advanced Infrastructure (SignalR, multi-tenancy, analytics)
+builder.Services.AddWp4Features(builder.Configuration);
+
+// WP5: Event Bridge & Tenant Isolation (webhooks, RLS)
+builder.Services.AddWp5Features(builder.Configuration);
+
 var app = builder.Build();
 
 // WP3: wire middleware & feature-flagged ledger binding
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
 app.UseSmartPayPlatformHardening(loggerFactory);
+
+// WP4: wire advanced infrastructure middleware
+app.UseWp4Features(builder.Configuration);
+
+// WP5: wire event bridge features
+app.UseWp5Features(builder.Configuration);
 
 // Enable FastEndpoints and Swagger
 app.UseFastEndpoints();
