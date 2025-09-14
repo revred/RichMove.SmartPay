@@ -9,6 +9,7 @@ This repository powers the SmartPay API and related admin/merchant UI.
 
 ## Current Focus
 - **WP4**: Realtime notifications, multi‑tenancy scaffolding, lightweight analytics.
+- **WP5**: Event Bridge (webhooks) + RLS templates.
 - **WP6**: UI & SDK plan (Blazor SSR + REST‑first SDKs). This commit adds **documentation only** for WP6.
 
 ## Quick Links
@@ -18,6 +19,12 @@ This repository powers the SmartPay API and related admin/merchant UI.
 - **Low‑Cost Azure Hosting**: `DOCS/Hosting/Azure.LowCost.md`
 - **SDK Consumption**: `DOCS/API/SDK-Consumption.md`
 - **Blazor Perf Cookbook**: `DOCS/Perf/Blazor.Fast.md`
+
+## V&V Hub
+- **WPS Index**: `WPS/INDEX.md`
+- **Traceability Matrix**: `DOCS/VnV/TraceabilityMatrix.csv`
+- **Verification Process**: `DOCS/VnV/VerificationAndValidation.md`
+- **Smoke Playbook**: `Smoke_Features.md`
 
 ## 🏗️ Architecture
 

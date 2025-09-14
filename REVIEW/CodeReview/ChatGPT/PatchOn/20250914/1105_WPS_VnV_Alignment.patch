@@ -1,0 +1,425 @@
+From 6c4e2a1b9d8f7e6a5b4c3d2e Mon Sep 14 11:05:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Sun, 14 Sep 2025 11:05:00 +0100
+Subject: [WPS/V&V] Alignment pass after WP5: index, templates, V&V model,
+ traceability, deviations log (docs-only)
+X-Patch-Name: 1105_WPS_VnV_Alignment.patch
+
+# Summary
+# - Introduces a **V&V-first structure** across WPS and DOCS.
+# - Adds an index for all Work Packages, standard template, and explicit
+#   V&V tables per WP (WP1..WP5) with traceability to Features (E/F/N/R)
+#   and Tests (SMK/UNIT/INTEG/PERF).
+# - Adds a Docs V&V hub with a traceability matrix and test catalogue.
+# - Flags minor deviations/clarifications and resolves contradictions.
+# - No runtime code changes. Documentation only.
+
+---
+diff --git a/WPS/INDEX.md b/WPS/INDEX.md
+new file mode 100644
+index 0000000..d1a2b3c
+--- /dev/null
++++ b/WPS/INDEX.md
+@@ -0,0 +1,119 @@
++# Work Packages — Master Index (V&V aligned)
++
++**Purpose:** Single entry point for scope, status and **Verification & Validation** (V&V) traceability.
++
++## Status Legend
++- **Plan** — documentation only
++- **Scaffold** — wiring, placeholders
++- **Feature** — end-to-end behavior behind flags
++- **Hardening** — perf, cost, security, docs
++
++## Table
++| WP | Title | Status | Primary Epics | Key Artifacts | V&V Tables |
++|---:|-------|--------|---------------|---------------|------------|
++| WP1 | Platform Foundation | Feature/Hardening | E1 | `README.md`, API shell, health | `WPS/WP1.md#vv` |
++| WP2 | Foreign Exchange Core | Feature | E2 | FX quote endpoint, storage | `WPS/WP2.md#vv` |
++| WP3 | Payment Providers | Plan | E3 | Orchestration plan | `WPS/WP3.md#vv` |
++| WP4 | Advanced (Realtime/Tenancy/Analytics) | Feature | E4 | Hub, tenancy, metrics | `WPS/WP4.md#vv` |
++| WP4.1 | Triggers & Perf Smoke | Feature | E4 | Quote trigger, k6 | `WPS/WP4.1.md#vv` |
++| WP5 | Event Bridge & RLS | Feature | E4/E5 | Webhooks, RLS templates | `WPS/WP5.md#vv` |
++| WP6 | UI & SDK | Plan | E7/E8 | Blazor SSR plan, SDK plan | `WPS/WP6.md#vv` |
++
++> V&V hub: see `DOCS/VnV/VerificationAndValidation.md` and `DOCS/VnV/TraceabilityMatrix.csv`.
++
++## Naming & IDs
++- **Features:** `E#`, `E#.F#`, `E#.F#.N#`, requirements `R#` at any level.
++- **Tests:** `SMK-*` (smoke), `UNIT-*`, `INTEG-*`, `PERF-*`.
++- **Traceability Key:** `FeatureID -> TestIDs -> WorkPackage`.
++
++## Change Control
++- New features must add rows to the traceability matrix and a smoke probe.
++- Docs and CSV stay in lock‑step with each WP merge.
++
+diff --git a/WPS/TEMPLATE.md b/WPS/TEMPLATE.md
+new file mode 100644
+index 0000000..a3c1d2e
+--- /dev/null
++++ b/WPS/TEMPLATE.md
+@@ -0,0 +1,84 @@
++# WPx — Title
++
++## Scope
++- Goals, constraints, flags.
++
++## Out-of-scope
++- Defer/explicit exclusions.
++
++## Deliverables
++- Artifacts, endpoints, migrations.
++
++## V&V {#vv}
++### Feature → Test mapping
++| Feature ID | Name | Test IDs | Evidence / Location |
++|-----------:|------|----------|---------------------|
++| E?.F? | ... | SMK-..., UNIT-..., PERF-... | link to tests/logs |
++
++### Acceptance
++- Measurable, pass/fail.
++
++### Rollback
++- Steps to disable or revert safely.
++
++## Docs
++- What changed in README, DOCS, and WPS.
+diff --git a/WPS/WP1.md b/WPS/WP1.md
+new file mode 100644
+index 0000000..b4c2d3e
+--- /dev/null
++++ b/WPS/WP1.md
+@@ -0,0 +1,82 @@
++# WP1 — Platform Foundation
++
++## Scope
++- API shell (FastEndpoints/minimal hosting), Swagger, health checks, CI coverage gate.
++
++## Deliverables
++- `/swagger/*`, `/health/live`, `/health/ready`, CI job with coverage ≥60%.
++
++## V&V {#vv}
++### Feature → Test mapping
++| Feature ID | Name | Test IDs | Evidence / Location |
++|-----------:|------|----------|---------------------|
++| E1.F1 | API shell alive | SMK-E1-Host | Smoke_Features.md §3.1-A |
++| E1.F2 | Swagger available | SMK-E1-Swagger | Smoke_Features.md §3.1-B |
++| E1.F3 | Health live/ready | SMK-E1-Health | Smoke_Features.md §3.1-C |
++| E1.F4 | Coverage gate | CI-E1-Coverage | CI logs |
++
++### Acceptance
++- 200 on `/health/*`; Swagger 200; coverage ≥60%.
++
++### Rollback
++- None required; non-breaking.
+diff --git a/WPS/WP2.md b/WPS/WP2.md
+new file mode 100644
+index 0000000..c5d4e3f
+--- /dev/null
++++ b/WPS/WP2.md
+@@ -0,0 +1,94 @@
++# WP2 — Foreign Exchange Core
++
++## Scope
++- `POST /api/fx/quote` happy path + validation, persistence, DB health.
++
++## Deliverables
++- Endpoint, storage path, background pricing tick.
++
++## V&V {#vv}
++### Feature → Test mapping
++| Feature ID | Name | Test IDs | Evidence / Location |
++|-----------:|------|----------|---------------------|
++| E2.F1 | Create FX Quote | SMK-E2-Quote-OK, SMK-E2-Quote-400 | Smoke_Features.md §3.2-A/B |
++| E2.F2 | Persist quotes | INTEG-E2-DB-Save | Integration tests (DB) |
++| E2.F3 | Pricing background | OBS-E2-Metrics | Logs/metrics (optional PR) |
++| E2.F4 | DB health | SMK-E2-DBHealth | Smoke_Features.md §3.2-C |
++| E2.F5 | Fallback mode | SMK-E2-NoDB (nightly) | Nightly matrix |
++
++### Acceptance
++- Valid request returns JSON with id/rate; invalid returns RFC7807; DB health 200.
++
++### Rollback
++- Disable persistence via config for local or degraded modes.
+diff --git a/WPS/WP3.md b/WPS/WP3.md
+new file mode 100644
+index 0000000..d6e4f5a
+--- /dev/null
++++ b/WPS/WP3.md
+@@ -0,0 +1,67 @@
++# WP3 — Payment Provider Orchestration (Plan)
++
++## Scope
++- Multi-provider routing with failover; SLA scoring.
++
++## V&V {#vv}
++### Feature → Test mapping
++| Feature ID | Name | Test IDs | Evidence / Location |
++|-----------:|------|----------|---------------------|
++| E3.F1 | Provider routing | PLAN-E3-Routing | To be defined in WP3.1 |
++| E3.F2 | Provider SLA | PLAN-E3-SLA | To be defined in WP3.1 |
++
++### Acceptance
++- To be defined (WP3.1).
+diff --git a/WPS/WP4.md b/WPS/WP4.md
+index 8b92c11..2e7bc42 100644
+--- a/WPS/WP4.md
++++ b/WPS/WP4.md
+@@ -1,4 +1,4 @@
+-# WP4 — Advanced Features (Scaffold)
++# WP4 — Advanced Features (Scaffold → Feature)
+@@ -9,6 +9,32 @@
+ - Hook points ready for domain events (WP4.2).
+ 
+ ## 2) Multi-tenancy plumbing
+ - Ambient `TenantContext` resolved from `X-Tenant` header or subdomain.
+ - `ITenantResolver` default strategy: `Host` or `Header` (configurable).
+ - Middleware that sets `TenantContext.Current` per request.
+ 
+ ## 3) Analytics (lightweight)
+ - Request logging middleware (structured logs).
+ - Endpoint and status code counters via `System.Diagnostics.Metrics`.
+ - Optional: surface `/metrics` endpoint in WP4.3.
+ 
++---
++
++## V&V {#vv}
++### Feature → Test mapping
++| Feature ID | Name | Test IDs | Evidence / Location |
++|-----------:|------|----------|---------------------|
++| E4.F1 | Notifications Hub | SMK-E4-Hub-Negotiate | Smoke_Features.md §3.3-A |
++| E4.F2 | Notification Service (In-Memory) | INTEG-E4-Notify-Loopback | Covered via trigger E4.F5 |
++| E4.F3 | Multi-tenancy middleware | SMK-E4-Tenant-Header | Smoke_Features.md §3.3-B |
++| E4.F3.N1 | Tenant resolver strategies | UNIT-E4-TenantResolver | `ZEN/TESTS/WP4/TenantResolverTests.cs` |
++| E4.F4 | Analytics counters/logs | OBS-E4-Metrics | Logs/metrics (optional PR) |
++
++### Acceptance
++- Hub negotiate not 404; header strategy functional; resolver unit tests passing.
++
++### Notes / Clarifications
++- **Mapping:** `MapHub` is the canonical mapping (replacing `UseEndpoints`) from WP4.1 onward.
++
+diff --git a/WPS/WP4.1.md b/WPS/WP4.1.md
+new file mode 100644
+index 0000000..e7f8a6b
+--- /dev/null
++++ b/WPS/WP4.1.md
+@@ -0,0 +1,74 @@
++# WP4.1 — Triggers & Perf Smoke
++
++## Scope
++- FX quote created → realtime trigger (middleware) and k6 smoke scenario.
++
++## Deliverables
++- `FxQuoteTriggerMiddleware`, `ANALYSIS/PERF/scenarios/fx-quote-smoke.js`, hub negotiate smoke test.
++
++## V&V {#vv}
++### Feature → Test mapping
++| Feature ID | Name | Test IDs | Evidence / Location |
++|-----------:|------|----------|---------------------|
++| E4.F5 | FX Quote Created Trigger | SMK-E4-Trigger-RoundTrip | Smoke_Features.md §3.3-C |
++| E4.F6 | Perf smoke (k6) | PERF-E4-K6-Quote | `ANALYSIS/PERF/scenarios/fx-quote-smoke.js` |
++| E4.F7 | Hub negotiation | SMK-E4-Hub-Negotiate | Smoke_Features.md §3.3-A |
++
++### Acceptance
++- Event received within 5s after quote; k6 p95 under guardrail.
+diff --git a/WPS/WP5.md b/WPS/WP5.md
+index 77e3a18..f8a9c01 100644
+--- a/WPS/WP5.md
++++ b/WPS/WP5.md
+@@ -1,11 +1,13 @@
+ # WP5 — Event Bridge & Tenant Isolation (Implementation)
+ 
+ **Goal:** Bridge domain events outward (webhooks) and finalize multi-tenant isolation at the DB layer (RLS), without adding runtime bloat or heavy deps.
+ 
+ ## Scope
+ 1. **Outbound Webhooks**
+@@ -33,6 +35,33 @@ Add `appsettings.WP5.sample.json` and selectively merge:
+ }
+ ```
+ 
+ ## Wire-up
+ ```csharp
+ builder.Services.AddWp5Features(builder.Configuration);
+ app.UseWp5Features(builder.Configuration);
+ ```
+ 
+ ## Testing
+ - Unit tests cover signature calculation and composite dispatch fan-out.
+ - Smoke: set one test endpoint (httpbin or mock) and POST a quote to observe a webhook (see `Smoke_Features.md` §3.3).
+ 
+ ## RLS (Supabase)
+ See `DB/SUPABASE/WP5_RLS.sql` and `DOCS/Data/RLS_Supabase.md` for enabling per-tenant isolation.
++
++---
++
++## V&V {#vv}
++### Feature → Test mapping
++| Feature ID | Name | Test IDs | Evidence / Location |
++|-----------:|------|----------|---------------------|
++| E4.F2 (extended) | Composite notifications (SignalR + Webhooks) | INTEG-WP5-Composite | Manual smoke + logs |
++| E5.F? | Webhook signature (HMAC) | UNIT-WP5-Signer | `ZEN/TESTS/WP5/WebhookSignerTests.cs` |
++| E5.F? | Outbox retry | OBS-WP5-Outbox | Logs show retries/backoff |
++| E5.F? | Webhook delivery | SMK-WP5-Webhook-Delivery | Configured endpoint receives POST |
++| E2.F2 (DB) | RLS tenant isolation | INTEG-WP5-RLS | DB script applied; anon vs service role behavior |
++
++### Acceptance
++- When enabled, `fx.quote.created` mirrors to at least one configured webhook with valid `Richmove-Signature`.
++- RLS policies enforce tenant row visibility (as per guide).
+diff --git b/DOCS/VnV/VerificationAndValidation.md a/DOCS/VnV/VerificationAndValidation.md
+new file mode 100644
+index 0000000..ab1c2d3
+--- /dev/null
++++ b/DOCS/VnV/VerificationAndValidation.md
+@@ -0,0 +1,128 @@
+# Verification & Validation (V&V) — Model & Process
++
++**Goal:** Every feature has a purpose, a test, and evidence. We prevent bloat and regressions by maintaining strict traceability.
++
++## IDs & Taxonomy
++- **Feature IDs:** `E#`, `E#.F#`, `E#.F#.N#`, optional `R#` for requirements at any level.
++- **Test IDs:** `SMK-*` (smoke), `UNIT-*`, `INTEG-*`, `PERF-*`, `OBS-*` (observability checks).
++
++## Traceability
++`FeatureID → TestIDs → WorkPackage → Evidence`
++
++**Sources:**
++- `WPS/*` — WP plans with V&V tables.
++- `DOCS/VnV/TraceabilityMatrix.csv` — master, machine-readable index.
++- `Smoke_Features.md` — runnable smoke playbook.
++
++## Process
++1. Propose/change feature → add rows to WP V&V table and TraceabilityMatrix.
++2. Add/adjust smoke/other tests; ensure IDs match.
++3. CI runs PR smoke subset; nightly full matrix.
++4. Evidence stored in CI logs, artifacts, or linked dashboards.
++
++## Acceptance Gates
++- No WP merges without: updated V&V table, matrix rows, and at least one smoke probe.
++
++## Evidence Examples
++- Smoke outputs (HTTP status/JSON fields).
++- Unit test results (xUnit).
++- k6 thresholds.
++- Logs/metrics screenshots or text.
+diff --git a/DOCS/VnV/TraceabilityMatrix.csv b/DOCS/VnV/TraceabilityMatrix.csv
+new file mode 100644
+index 0000000..a1b2c3d
+--- /dev/null
++++ b/DOCS/VnV/TraceabilityMatrix.csv
+@@ -0,0 +1,18 @@
++FeatureID,FeatureName,WorkPackage,TestIDs,Category,Evidence
++E1.F1,API shell alive,WP1,"SMK-E1-Host",UH,Smoke_Features.md §3.1-A
++E1.F2,Swagger available,WP1,"SMK-E1-Swagger",UF,Smoke_Features.md §3.1-B
++E1.F3,Health live/ready,WP1,"SMK-E1-Health",UF,Smoke_Features.md §3.1-C
++E2.F1,Create FX Quote,WP2,"SMK-E2-Quote-OK;SMK-E2-Quote-400",UF,Smoke_Features.md §3.2-A/B
++E2.F2,Persist quotes,WP2,"INTEG-E2-DB-Save",UH,Integration tests
++E2.F4,DB health endpoint,WP2,"SMK-E2-DBHealth",UF,Smoke_Features.md §3.2-C
++E4.F1,Notifications Hub,WP4,"SMK-E4-Hub-Negotiate",UF,Smoke_Features.md §3.3-A
++E4.F3,Multi-tenancy header,WP4,"SMK-E4-Tenant-Header;UNIT-E4-TenantResolver",UH,Smoke_Features.md §3.3-B
++E4.F5,FX Quote Created Trigger,WP4.1,"SMK-E4-Trigger-RoundTrip",UF,Smoke_Features.md §3.3-C
++E4.F6,Perf smoke (k6),WP4.1,"PERF-E4-K6-Quote",UH,ANALYSIS/PERF/scenarios/fx-quote-smoke.js
++E5.Webhooks,Outbound webhooks (HMAC),WP5,"UNIT-WP5-Signer;SMK-WP5-Webhook-Delivery",UH,Tests + logs
++E5.Outbox,Retry outbox,WP5,"OBS-WP5-Outbox",UH,Logs with backoff attempts
++E5.RLS,DB RLS tenant isolation,WP5,"INTEG-WP5-RLS",UH,DB script + Supabase behavior
++E7.F1,Blazor SSR Admin UI,WP6,"PLAN-E7-UI",UF,WP6 docs
++E7.F2,OpenAPI-first SDKs,WP6,"PLAN-E7-SDK",UF,WP6 docs
++
++
+diff --git a/DOCS/VnV/TestCatalogue.md b/DOCS/VnV/TestCatalogue.md
+new file mode 100644
+index 0000000..c2d3e4f
+--- /dev/null
++++ b/DOCS/VnV/TestCatalogue.md
+@@ -0,0 +1,86 @@
+# Test Catalogue (IDs and Locations)
++
++Map of **Test IDs** to **files/commands** used across PR and nightly matrices.
++
++## Smoke (SMK-*)
++- **SMK-E1-Host** — `curl -I /` (Smoke_Features.md §3.1-A)
++- **SMK-E1-Swagger** — `curl /swagger/index.html` (Smoke_Features.md §3.1-B)
++- **SMK-E1-Health** — `curl /health/*` (Smoke_Features.md §3.1-C)
++- **SMK-E2-Quote-OK** — POST `/api/fx/quote` valid (Smoke_Features.md §3.2-A)
++- **SMK-E2-Quote-400** — POST invalid (Smoke_Features.md §3.2-B)
++- **SMK-E2-DBHealth** — `GET /v1/health/db` (Smoke_Features.md §3.2-C)
++- **SMK-E4-Hub-Negotiate** — POST `/hubs/notifications/negotiate` (Smoke_Features.md §3.3-A)
++- **SMK-E4-Trigger-RoundTrip** — listen + POST quote (Smoke_Features.md §3.3-C)
++- **SMK-WP5-Webhook-Delivery** — webhook endpoint receives POST (config driven)
++
++## Unit (UNIT-*)
++- **UNIT-E4-TenantResolver** — `ZEN/TESTS/WP4/TenantResolverTests.cs`
++- **UNIT-WP5-Signer** — `ZEN/TESTS/WP5/WebhookSignerTests.cs`
++
++## Integration (INTEG-*)
++- **INTEG-E2-DB-Save** — Integration test harness (DB)
++- **INTEG-WP5-RLS** — DB behavior with/without service role
++
++## Performance (PERF-*)
++- **PERF-E4-K6-Quote** — `ANALYSIS/PERF/scenarios/fx-quote-smoke.js`
++
++## Observability (OBS-*)
++- **OBS-E2-Metrics** — logs/metrics show pricing tick
++- **OBS-WP5-Outbox** — logs show retries/backoff
+diff --git a/WPS/DEVIATIONS.md b/WPS/DEVIATIONS.md
+new file mode 100644
+index 0000000..d3e4f5a
+--- /dev/null
++++ b/WPS/DEVIATIONS.md
+@@ -0,0 +1,84 @@
+# Deviations & Clarifications (Steering Log)
++
++> Maintained by Strategist/Steering. Flag anything that drifts from plan or needs a decision.
++
++## 2025-09-14
++
++### D1 — SignalR mapping style
++- **Observation:** Early WP4 draft used `UseEndpoints(MapHub)`; WP4.1 refactored to `app.MapHub(...)` (minimal hosting alignment).
++- **Action:** WP4 notes updated. **Canonical:** `MapHub`. No further action.
++
++### D2 — Tenant strategy default
++- **Observation:** Default strategy documented as `Host`; header override via `X-Tenant`. Code and docs aligned.
++- **Action:** WP4 confirms default; WP4.1 tests cover both strategies.
++
++### D3 — Event topic naming
++- **Observation:** Topic chosen: `fx.quote.created`. Some docs referenced `updated` as future topic.
++- **Action:** Standardize on `fx.quote.created` for WP4.1; leave `*.updated` as reserved. Docs updated.
++
++### D4 — Metrics naming
++- **Observation:** Meter name `SmartPay.Api`, counters `http.requests.total`, histogram `http.request.duration.ms`.
++- **Action:** WPS references added; export naming to be revisited in observability hardening.
++
++### D5 — Webhook signature header
++- **Observation:** Header name `Richmove-Signature` fixed across docs and tests.
++- **Action:** Keep consistent; add verifier samples in WP6 SDK work.
++
++### D6 — RLS delete policy
++- **Observation:** Delete intentionally restricted (service-role only).
++- **Action:** Documented in RLS guide; acceptable for now.
+diff --git a/README.md b/README.md
+index 7b2a6c3..8c3d4e5 100644
+--- a/README.md
++++ b/README.md
+@@ -1,13 +1,20 @@
+ # RichMove.SmartPay — Overview
+ 
+ This repository powers the SmartPay API and related admin/merchant UI.  
+ 
+ ## Current Focus
+ - **WP4**: Realtime notifications, multi‑tenancy scaffolding, lightweight analytics.  
+ - **WP6**: UI & SDK plan (Blazor SSR + REST‑first SDKs). This commit adds **documentation only** for WP6.
++- **WP5**: Event Bridge (webhooks) + RLS templates.
+ 
+ ## Quick Links
+ - **WP4**: `WPS/WP4.md`
+ - **WP6 Plan**: `WPS/WP6.md`
+ - **Blazor UI Plan**: `DOCS/UI/Blazor/Plan.md`
+ - **Low‑Cost Azure Hosting**: `DOCS/Hosting/Azure.LowCost.md`
+ - **SDK Consumption**: `DOCS/API/SDK-Consumption.md`
+ - **Blazor Perf Cookbook**: `DOCS/Perf/Blazor.Fast.md`
++
++## V&V Hub
++- **WPS Index**: `WPS/INDEX.md`
++- **Traceability Matrix**: `DOCS/VnV/TraceabilityMatrix.csv`
++- **Verification Process**: `DOCS/VnV/VerificationAndValidation.md`
++- **Smoke Playbook**: `Smoke_Features.md`

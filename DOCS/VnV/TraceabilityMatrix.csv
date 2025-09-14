@@ -1,0 +1,16 @@
+FeatureID,FeatureName,WorkPackage,TestIDs,Category,Evidence
+E1.F1,API shell alive,WP1,"SMK-E1-Host",UH,Smoke_Features.md §3.1-A
+E1.F2,Swagger available,WP1,"SMK-E1-Swagger",UF,Smoke_Features.md §3.1-B
+E1.F3,Health live/ready,WP1,"SMK-E1-Health",UF,Smoke_Features.md §3.1-C
+E2.F1,Create FX Quote,WP2,"SMK-E2-Quote-OK;SMK-E2-Quote-400",UF,Smoke_Features.md §3.2-A/B
+E2.F2,Persist quotes,WP2,"INTEG-E2-DB-Save",UH,Integration tests
+E2.F4,DB health endpoint,WP2,"SMK-E2-DBHealth",UF,Smoke_Features.md §3.2-C
+E4.F1,Notifications Hub,WP4,"SMK-E4-Hub-Negotiate",UF,Smoke_Features.md §3.3-A
+E4.F3,Multi-tenancy header,WP4,"SMK-E4-Tenant-Header;UNIT-E4-TenantResolver",UH,Smoke_Features.md §3.3-B
+E4.F5,FX Quote Created Trigger,WP4.1,"SMK-E4-Trigger-RoundTrip",UF,Smoke_Features.md §3.3-C
+E4.F6,Perf smoke (k6),WP4.1,"PERF-E4-K6-Quote",UH,ANALYSIS/PERF/scenarios/fx-quote-smoke.js
+E5.Webhooks,Outbound webhooks (HMAC),WP5,"UNIT-WP5-Signer;SMK-WP5-Webhook-Delivery",UH,Tests + logs
+E5.Outbox,Retry outbox,WP5,"OBS-WP5-Outbox",UH,Logs with backoff attempts
+E5.RLS,DB RLS tenant isolation,WP5,"INTEG-WP5-RLS",UH,DB script + Supabase behavior
+E7.F1,Blazor SSR Admin UI,WP6,"PLAN-E7-UI",UF,WP6 docs
+E7.F2,OpenAPI-first SDKs,WP6,"PLAN-E7-SDK",UF,WP6 docs
