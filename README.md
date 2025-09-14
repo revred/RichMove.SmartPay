@@ -5,7 +5,19 @@
 
 **Payment orchestration platform conceived and specified by Ram Revanur**
 
-A modern, scalable payment orchestration platform built with .NET 9, FastEndpoints, and Supabase integration for seamless foreign exchange operations and multi-provider payment processing.
+This repository powers the SmartPay API and related admin/merchant UI.
+
+## Current Focus
+- **WP4**: Realtime notifications, multi‑tenancy scaffolding, lightweight analytics.
+- **WP6**: UI & SDK plan (Blazor SSR + REST‑first SDKs). This commit adds **documentation only** for WP6.
+
+## Quick Links
+- **WP4**: `WPS/WP4.md`
+- **WP6 Plan**: `WPS/WP6.md`
+- **Blazor UI Plan**: `DOCS/UI/Blazor/Plan.md`
+- **Low‑Cost Azure Hosting**: `DOCS/Hosting/Azure.LowCost.md`
+- **SDK Consumption**: `DOCS/API/SDK-Consumption.md`
+- **Blazor Perf Cookbook**: `DOCS/Perf/Blazor.Fast.md`
 
 ## 🏗️ Architecture
 
@@ -179,12 +191,23 @@ The project includes a comprehensive CI/CD pipeline:
 - Provider failover and routing
 - Transaction state management
 
-### WP4: Advanced Features
-- Real-time notifications
-- Advanced analytics dashboard
-- Multi-tenant support
+### WP4: Advanced Features ✅
+- ✅ Real-time notifications with SignalR
+- ✅ Multi-tenant scaffolding with tenant context
+- ✅ Lightweight analytics and request logging
+- ✅ Event-driven FX quote triggers (WP4.1)
+
+### WP6: UI & SDK (Plan)
+- **Blazor SSR UI**: Lightning-fast server-rendered admin console
+- **REST-first SDKs**: Auto-generated C# and TypeScript clients from OpenAPI
+- **Performance targets**: TTFB < 300ms, FCP < 1.2s on low-end devices
+- **Ultra-low cost Azure hosting**: Scale-to-zero with Container Apps or minimal App Service
 
 ## 🤝 Contributing
+
+- Prefer **OpenAPI‑first** for new endpoints.
+- Keep UI **server‑rendered** and minimal; use realtime only where it adds value.
+- Track performance budgets; fail builds on regressions.
 
 1. Fork the repository
 2. Create a feature branch
