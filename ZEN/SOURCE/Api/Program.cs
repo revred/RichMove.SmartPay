@@ -57,6 +57,9 @@ else
 builder.Services.AddFastEndpoints();
 builder.Services.SwaggerDocument();
 
+// Add controllers for Group 8 endpoints
+builder.Services.AddControllers();
+
 // WP3: Platform Hardening (flags, correlation, idempotency, problem details)
 builder.Services.AddSmartPayPlatformHardening(builder.Configuration);
 
@@ -100,6 +103,9 @@ app.MapGet("/health/ready", async (IHealthService healthService, CancellationTok
 
 // Legacy endpoint for compatibility
 app.MapHealthChecks("/health");
+
+// Group 8: Advanced Infrastructure & Deployment endpoints
+app.MapControllers();
 
 app.MapGet("/", () => Results.Ok(new
 {

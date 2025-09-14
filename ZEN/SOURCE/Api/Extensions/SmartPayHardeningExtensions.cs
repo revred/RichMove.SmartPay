@@ -14,6 +14,8 @@ using RichMove.SmartPay.Api.Resilience;
 using RichMove.SmartPay.Api.Security;
 using RichMove.SmartPay.Api.Services;
 using RichMove.SmartPay.Api.Validation;
+using RichMove.SmartPay.Api.Infrastructure.Deployment;
+using RichMove.SmartPay.Api.Infrastructure.Scalability;
 using RichMove.SmartPay.Core.Blockchain;
 using RichMove.SmartPay.Core.Time;
 using RichMove.SmartPay.Infrastructure.Blockchain;
@@ -33,6 +35,9 @@ public static partial class SmartPayHardeningExtensions
         services.Configure<CircuitBreakerOptions>(config.GetSection("CircuitBreaker"));
         services.Configure<MemoryPoolOptions>(config.GetSection("MemoryPool"));
         services.Configure<CleanupOptions>(config.GetSection("Cleanup"));
+        services.Configure<DeploymentOptions>(config.GetSection("Deployment"));
+        services.Configure<ScalingOptions>(config.GetSection("Scaling"));
+        services.Configure<MetricsOptions>(config.GetSection("Metrics"));
 
         // Clock abstraction
         services.AddSingleton<IClock, SystemClock>();
@@ -71,6 +76,11 @@ public static partial class SmartPayHardeningExtensions
         // Background services
         services.AddHostedService<CleanupBackgroundService>();
 
+        // Group 8: Advanced Infrastructure & Deployment services
+        services.AddSingleton<PrometheusMetricsService>();
+        services.AddSingleton<KubernetesDeploymentService>();
+        services.AddHostedService<AutoScalingService>();
+
         return services;
     }
 
@@ -95,6 +105,9 @@ public static partial class SmartPayHardeningExtensions
 
         // Input validation (MVP-essential)
         app.UseMiddleware<InputValidationMiddleware>();
+
+        // Metrics collection (Group 8)
+        app.UseMiddleware<MetricsMiddleware>();
 
         // Blockchain binding by feature flag
         var flags = app.ApplicationServices.GetRequiredService<IOptions<FeatureFlags>>().Value;

@@ -1,0 +1,66 @@
+# Multi-stage production Dockerfile for RichMove SmartPay API
+# Security-hardened with non-root user and minimal attack surface
+
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
+WORKDIR /src
+
+# Copy only necessary files for restore
+COPY SOURCE/Api/*.csproj SOURCE/Api/
+COPY SOURCE/Api/NuGet.config SOURCE/Api/
+RUN dotnet restore SOURCE/Api/RichMove.SmartPay.Api.csproj \
+    --runtime alpine-x64 \
+    --no-cache
+
+# Copy source and build
+COPY SOURCE/Api/ SOURCE/Api/
+RUN dotnet publish SOURCE/Api/RichMove.SmartPay.Api.csproj \
+    -c Release \
+    -o /app/publish \
+    --runtime alpine-x64 \
+    --self-contained false \
+    --no-restore
+
+# Security scan stage (optional - can be skipped in CI/CD if external scanning used)
+FROM build AS security-scan
+RUN dotnet list SOURCE/Api/RichMove.SmartPay.Api.csproj package --vulnerable --include-transitive || true
+
+# Runtime stage - minimal, security-hardened
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS runtime
+
+# Create non-root user
+RUN addgroup -g 1001 -S appgroup && \
+    adduser -u 1001 -S appuser -G appgroup
+
+# Install security updates only
+RUN apk update && \
+    apk upgrade && \
+    apk add --no-cache ca-certificates && \
+    rm -rf /var/cache/apk/*
+
+# Set up working directory with proper ownership
+WORKDIR /app
+RUN chown -R appuser:appgroup /app
+
+# Copy application files
+COPY --from=build --chown=appuser:appgroup /app/publish .
+
+# Security hardening
+USER appuser
+
+# Remove unnecessary environment variables for production
+ENV DOTNET_PRINT_TELEMETRY_MESSAGE=false \
+    DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true \
+    DOTNET_CLI_TELEMETRY_OPTOUT=true \
+    DOTNET_NOLOGO=true \
+    ASPNETCORE_ENVIRONMENT=Production
+
+# Health check endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Expose port (non-privileged)
+EXPOSE 8080
+
+# Use exec form for proper signal handling
+ENTRYPOINT ["dotnet", "RichMove.SmartPay.Api.dll"]

@@ -1,0 +1,64 @@
+# Docker build context optimization
+# Reduces build context size and improves security
+
+# Git and version control
+.git
+.gitignore
+.gitattributes
+
+# Development files
+**/*.md
+**/README.*
+**/LICENSE
+**/.env*
+**/.vs*
+**/.vscode
+
+# Build outputs
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# Test files
+**/TestResults/
+**/*Tests/
+**/*.Test/
+**/test*/
+**/coverage*/
+
+# Package management
+**/packages/
+**/node_modules/
+
+# IDE files
+**/.idea/
+**/*.swp
+**/*.swo
+**/*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (except production)
+**/Dockerfile*
+!Dockerfile.production
+**/docker-compose*
+**/.dockerignore
+
+# Security and secrets
+**/*.key
+**/*.pem
+**/*.pfx
+**/*.p12
+**/secrets/
+**/certs/
+
+# Logs
+**/logs/
+**/*.log
+
+# Temporary files
+**/tmp/
+**/temp/
