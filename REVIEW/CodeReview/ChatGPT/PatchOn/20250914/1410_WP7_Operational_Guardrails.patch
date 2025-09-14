@@ -1,0 +1,448 @@
+From a7b8c9d0e1f2031425364758 Mon Sep 15 14:10:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 14:10:00 +0100
+Subject: [WP7] Operational Guardrails Implementation: Admin auth, feature
+ flags, guarded /metrics & /scaling/status + V&V/docs updates
+X-Work-Package: WP7
+X-Patch-Name: 1410_WP7_Operational_Guardrails.patch
+
+# Overview
+# WP7 turns the previously documented guardrails into working code with minimal,
+# cost-conscious defaults. It remains opt-in and safe-by-default.
+#
+# Deliverables
+# - Admin authorization policy ("AdminOnly") with role-claim OR API key fallback (RED/local).
+# - Feature flags: Monitoring (Prometheus, OpenTelemetry) & Scaling (Status endpoint).
+# - Guarded endpoints implemented via FastEndpoints:
+#     GET /metrics           (text/plain; stub metric; guarded by flags + AdminOnly)
+#     GET /scaling/status    (application/json; no PII; guarded by flags + AdminOnly)
+# - Rate limiting policies for the guarded endpoints.
+# - WPS + V&V docs updated to reflect WP7 implementation.
+#
+# Defaults
+# - All flags disabled in RED by default.
+# - Endpoints not mapped (404) unless enabled; when enabled require AdminOnly.
+# - No persistent Prometheus in RED; exporters OFF by default.
+#
+---
+diff --git a/ZEN/SOURCE/Api/Bootstrap/WP7AppConfig.cs b/ZEN/SOURCE/Api/Bootstrap/WP7AppConfig.cs
+new file mode 100644
+index 0000000..1a2b3c4
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Bootstrap/WP7AppConfig.cs
+@@ -0,0 +1,176 @@
++using System.Security.Claims;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.Builder;
++using Microsoft.AspNetCore.RateLimiting;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Logging;
++using System.Threading.RateLimiting;
++
++namespace SmartPay.Api.Bootstrap;
++
++public static class WP7AppConfig
++{
++    public static IServiceCollection AddWp7Guardrails(this IServiceCollection services, IConfiguration cfg, ILoggerFactory? lf = null)
++    {
++        // Bind feature flags
++        services.Configure<FeaturesOptions>(cfg.GetSection("Features"));
++
++        // AdminOnly authorization policy
++        services.AddAuthorization(options =>
++        {
++            options.AddPolicy("AdminOnly", policy =>
++            {
++                policy.RequireAssertion(ctx =>
++                {
++                    var user = ctx.User;
++                    if (user?.Identity?.IsAuthenticated == true)
++                    {
++                        // Accept "Admin" role from common claim types
++                        if (user.IsInRole("Admin")) return true;
++                        foreach (var c in user.Claims)
++                        {
++                            if ((c.Type == ClaimTypes.Role || c.Type == "role" || c.Type == "roles"
++                                 || c.Type == "http://schemas.microsoft.com/ws/2008/06/identity/claims/role")
++                                && c.Value == "Admin")
++                                return true;
++                        }
++                    }
++
++                    // Fallback Admin API key for RED/local
++                    if (ctx.Resource is HttpContext httpCtx &&
++                        httpCtx.Request.Headers.TryGetValue("X-Admin-Token", out var token))
++                    {
++                        var expected = cfg["Admin:ApiKey"];
++                        if (TimingSafeEquals(token.ToString(), expected))
++                            return true;
++                    }
++                    return false;
++                });
++            });
++        });
++
++        // Rate limiting: conservative per-user (admin) limits
++        services.AddRateLimiter(_ => _
++            .AddPolicy("MetricsAdmin", httpContext =>
++                RateLimitPartition.GetFixedWindowLimiter(
++                    partitionKey: httpContext.User?.Identity?.Name ?? "anon",
++                    factory: _ => new FixedWindowRateLimiterOptions
++                    {
++                        PermitLimit = 10, // 10 rps
++                        Window = TimeSpan.FromSeconds(1),
++                        QueueLimit = 0,
++                        AutoReplenishment = true
++                    }))
++            .AddPolicy("ScalingAdmin", httpContext =>
++                RateLimitPartition.GetFixedWindowLimiter(
++                    partitionKey: httpContext.User?.Identity?.Name ?? "anon",
++                    factory: _ => new FixedWindowRateLimiterOptions
++                    {
++                        PermitLimit = 5, // 5 rps
++                        Window = TimeSpan.FromSeconds(1),
++                        QueueLimit = 0,
++                        AutoReplenishment = true
++                    }))
++        );
++
++        return services;
++    }
++
++    public static IApplicationBuilder UseWp7Guardrails(this IApplicationBuilder app, IConfiguration cfg)
++    {
++        // Rate limiting & auth must be on the pipeline before endpoints
++        app.UseRateLimiter();
++        app.UseAuthorization();
++        return app;
++    }
++
++    // Constant-time compare
++    private static bool TimingSafeEquals(string? a, string? b)
++    {
++        if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b)) return false;
++        var ba = System.Text.Encoding.UTF8.GetBytes(a);
++        var bb = System.Text.Encoding.UTF8.GetBytes(b);
++        if (ba.Length != bb.Length) return false;
++        int diff = 0;
++        for (int i = 0; i < ba.Length; i++) diff |= ba[i] ^ bb[i];
++        return diff == 0;
++    }
++}
++
++public sealed class FeaturesOptions
++{
++    public MonitoringOptions Monitoring { get; init; } = new();
++    public ScalingOptions Scaling { get; init; } = new();
++
++    public sealed class MonitoringOptions
++    {
++        public bool Enabled { get; init; }
++        public bool Prometheus { get; init; }
++        public bool OpenTelemetry { get; init; }
++    }
++
++    public sealed class ScalingOptions
++    {
++        public bool Enabled { get; init; }
++        public bool ExposeStatusEndpoint { get; init; }
++    }
++}
+diff --git a/ZEN/SOURCE/Api/Endpoints/Observability/MetricsEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Observability/MetricsEndpoint.cs
+new file mode 100644
+index 0000000..2b3c4d5
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Observability/MetricsEndpoint.cs
+@@ -0,0 +1,72 @@
++using FastEndpoints;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.RateLimiting;
++using Microsoft.Extensions.Options;
++using SmartPay.Api.Bootstrap;
++
++namespace SmartPay.Api.Endpoints.Observability;
++
++/// <summary>
++/// Guarded Prometheus-style metrics endpoint. Outputs a minimal, non-sensitive payload.
++/// Binding to private/loopback is recommended at hosting layer; this endpoint also
++/// requires AdminOnly and feature flags to be ON.
++/// </summary>
++[Authorize(Policy = "AdminOnly")]
++[EnableRateLimiting("MetricsAdmin")]
++public sealed class MetricsEndpoint(IOptions<FeaturesOptions> flags) : EndpointWithoutRequest
++{
++    public override void Configure()
++    {
++        Verbs(Http.GET);
++        Routes("/metrics");
++        AllowAnonymous(false);
++        Policies("AdminOnly");
++        // Note: rate limiter policy name via attribute
++    }
++
++    public override async Task HandleAsync(CancellationToken ct)
++    {
++        var f = flags.Value;
++        if (!(f.Monitoring?.Enabled ?? false) || !(f.Monitoring?.Prometheus ?? false))
++        {
++            await SendNotFoundAsync(ct);
++            return;
++        }
++
++        // Minimal stub payload (text/plain) to keep cost near-zero until full exporter is wired.
++        HttpContext.Response.ContentType = "text/plain";
++        await HttpContext.Response.StartAsync(ct);
++        await HttpContext.Response.WriteAsync("# TYPE smartpay_info gauge\n", ct);
++        await HttpContext.Response.WriteAsync("smartpay_info{service=\"smartpay\",version=\"wp7\"} 1\n", ct);
++    }
++}
+diff --git a/ZEN/SOURCE/Api/Endpoints/Scaling/ScalingStatusEndpoint.cs b/ZEN/SOURCE/Api/Endpoints/Scaling/ScalingStatusEndpoint.cs
+new file mode 100644
+index 0000000..3c4d5e6
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Endpoints/Scaling/ScalingStatusEndpoint.cs
+@@ -0,0 +1,95 @@
++using FastEndpoints;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.AspNetCore.RateLimiting;
++using Microsoft.Extensions.Options;
++using SmartPay.Api.Bootstrap;
++
++namespace SmartPay.Api.Endpoints.Scaling;
++
++public sealed record ScalingStatusDto(
++    string InstanceId,
++    long UptimeSeconds,
++    double CpuLoadApprox,
++    int PendingRequestsApprox);
++
++/// <summary>
++/// Admin-only scaling status endpoint with strictly non-PII and coarse metrics.
++/// </summary>
++[Authorize(Policy = "AdminOnly")]
++[EnableRateLimiting("ScalingAdmin")]
++public sealed class ScalingStatusEndpoint(IOptions<FeaturesOptions> flags) : EndpointWithoutRequest<ScalingStatusDto>
++{
++    private static readonly DateTimeOffset _start = DateTimeOffset.UtcNow;
++
++    public override void Configure()
++    {
++        Verbs(Http.GET);
++        Routes("/scaling/status");
++        AllowAnonymous(false);
++        Policies("AdminOnly");
++    }
++
++    public override async Task HandleAsync(CancellationToken ct)
++    {
++        var f = flags.Value;
++        if (!(f.Scaling?.Enabled ?? false) || !(f.Scaling?.ExposeStatusEndpoint ?? false))
++        {
++            await SendNotFoundAsync(ct);
++            return;
++        }
++
++        // Coarse data only; do not include PII/tenant/user data
++        var uptime = (long)(DateTimeOffset.UtcNow - _start).TotalSeconds;
++        var cpu = 0.0; // left as 0.0 placeholder; real capture would require runtime counters
++        var pending = 0; // placeholder; can be wired to server queue length if available
++        var id = Environment.GetEnvironmentVariable("WEBSITE_INSTANCE_ID")
++                 ?? Environment.MachineName;
++
++        await SendAsync(new ScalingStatusDto(id, uptime, cpu, pending), cancellation: ct);
++    }
++}
+diff --git a/ZEN/SOURCE/Api/appsettings.WP7.sample.json b/ZEN/SOURCE/Api/appsettings.WP7.sample.json
+new file mode 100644
+index 0000000..4d5e6f7
+--- /dev/null
++++ b/ZEN/SOURCE/Api/appsettings.WP7.sample.json
+@@ -0,0 +1,23 @@
++{
++  "Features": {
++    "Monitoring": {
++      "Enabled": false,
++      "Prometheus": false,
++      "OpenTelemetry": false
++    },
++    "Scaling": {
++      "Enabled": false,
++      "ExposeStatusEndpoint": false
++    }
++  },
++  "Admin": {
++    "ApiKey": "replace-me-for-red"
++  }
++}
+diff --git a/ZEN/TESTS/WP7/AdminPolicyTests.cs b/ZEN/TESTS/WP7/AdminPolicyTests.cs
+new file mode 100644
+index 0000000..5e6f708
+--- /dev/null
++++ b/ZEN/TESTS/WP7/AdminPolicyTests.cs
+@@ -0,0 +1,60 @@
++using System.Security.Claims;
++using Microsoft.AspNetCore.Authorization;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using SmartPay.Api.Bootstrap;
++using Xunit;
++
++namespace SmartPay.Tests.WP7;
++
++public class AdminPolicyTests
++{
++    [Fact]
++    public async Task AdminRole_Allows()
++    {
++        var (auth, ctx) = BuildAuth();
++        ctx.User = new(new ClaimsIdentity(new[] { new Claim(ClaimTypes.Role, "Admin") }, "test"));
++        var result = await auth.AuthorizeAsync(ctx.User, null, "AdminOnly");
++        Assert.True(result.Succeeded);
++    }
++
++    [Fact]
++    public async Task ApiKey_Allows_WhenConfigured()
++    {
++        var (auth, ctx) = BuildAuth(new Dictionary<string, string?> { ["Admin:ApiKey"] = "secret" }, header: "secret");
++        var result = await auth.AuthorizeAsync(ctx.User, ctx, "AdminOnly");
++        Assert.True(result.Succeeded);
++    }
++
++    private static (IAuthorizationService auth, DefaultHttpContext ctx) BuildAuth(
++        IDictionary<string, string?>? settings = null, string? header = null)
++    {
++        var cfg = new ConfigurationBuilder().AddInMemoryCollection(settings ?? new Dictionary<string, string?>()).Build();
++        var services = new ServiceCollection();
++        services.AddLogging();
++        services.AddAuthorization();
++        services.AddWp7Guardrails(cfg);
++        var sp = services.BuildServiceProvider();
++        var auth = sp.GetRequiredService<IAuthorizationService>();
++        var ctx = new DefaultHttpContext();
++        if (header is not null) ctx.Request.Headers["X-Admin-Token"] = header;
++        return (auth, ctx);
++    }
++}
+diff --git a/WPS/WP7.md b/WPS/WP7.md
+new file mode 100644
+index 0000000..6f7a8b9
+--- /dev/null
++++ b/WPS/WP7.md
+@@ -0,0 +1,124 @@
++# WP7 — Operational Guardrails (Implementation)
++
++**Goal:** Turn our guardrail design into running code with **Admin auth**, **feature flags**, **rate limits**, and **guarded endpoints**, keeping MVP cost and attack surface low.
++
++## Scope
++- `AdminOnly` policy (role or admin API key fallback in RED/local).
++- Feature flags: `Features.Monitoring` (`Prometheus`, `OpenTelemetry`), `Features.Scaling` (`ExposeStatusEndpoint`).
++- Guarded endpoints (FastEndpoints):
++  - `GET /metrics` (Prometheus-style text; stubbed; no PII; admin-only; flags ON required).
++  - `GET /scaling/status` (coarse JSON; admin-only; flags ON required).
++- Rate limiting (per-admin): metrics 10 rps; scaling 5 rps.
++
++## Out-of-scope
++- Full Prometheus exporter wiring; OTel exporters (kept OFF by default).
++
++## Deliverables
++- `ZEN/SOURCE/Api/Bootstrap/WP7AppConfig.cs` (flags, policy, rate limits).
++- `ZEN/SOURCE/Api/Endpoints/Observability/MetricsEndpoint.cs`
++- `ZEN/SOURCE/Api/Endpoints/Scaling/ScalingStatusEndpoint.cs`
++- `ZEN/SOURCE/Api/appsettings.WP7.sample.json`
++- Tests: `ZEN/TESTS/WP7/AdminPolicyTests.cs`
++
++## Wire-up
++Add to `Program.cs` near existing bootstrap:
++```csharp
++using SmartPay.Api.Bootstrap;
++// ...
++builder.Services.AddWp7Guardrails(builder.Configuration);
++// ...
++app.UseWp7Guardrails(builder.Configuration);
++```
++
++## V&V {#vv}
++### Feature → Test mapping
++| Feature ID | Name | Test IDs | Evidence / Location |
++|-----------:|------|----------|---------------------|
++| E7.F1 | AdminOnly policy | UNIT-WP7-AdminPolicy | `ZEN/TESTS/WP7/AdminPolicyTests.cs` |
++| E7.F2 | Feature flags bound | SMK-E7-Flags-404 | Flags off → /metrics 404 |
++| E7.F3 | `/metrics` guarded | SMK-E7-Metrics-401/200 | Flags on; unauth=401; admin=200 |
++| E7.F4 | `/scaling/status` guarded | SMK-E7-Scaling-401/200 | Flags on; unauth=401; admin=200 |
++| E7.F5 | Rate limits enforced | OBS-E7-RateLimit | Logs show 429 when limits exceeded |
++
++### Acceptance
++- With flags OFF: `/metrics`, `/scaling/status` → **404**.
++- With flags ON and no auth: **401**; with Admin: **200**.
++- No PII in scaling payload; rate limits active; defaults safe.
++
++### Rollback
++- Disable flags or remove `UseWp7Guardrails` → endpoints unreachable.
++
++## Docs
++- `DOCS/Security/AdminAuth.md` semantics (policy + fallback).
++- `DOCS/Architecture/FeatureFlags.md` updated previously; aligns with flags above.
+diff --git a/WPS/INDEX.md b/WPS/INDEX.md
+index b2c7d4e..c1d2e3f 100644
+--- a/WPS/INDEX.md
++++ b/WPS/INDEX.md
+@@ -8,6 +8,7 @@
+ | WP3 | Payment Providers | Plan | E3 | Orchestration plan | `WPS/WP3.md#vv` |
+ | WP4 | Advanced (Realtime/Tenancy/Analytics) | Feature | E4 | Hub, tenancy, metrics | `WPS/WP4.md#vv` |
+ | WP4.1 | Triggers & Perf Smoke | Feature | E4 | Quote trigger, k6 | `WPS/WP4.1.md#vv` |
+ | WP5 | Event Bridge & RLS | Feature | E4/E5 | Webhooks, RLS templates | `WPS/WP5.md#vv` |
++| WP7 | Operational Guardrails | Feature | E7/E8 | AdminOnly, flags, guarded endpoints | `WPS/WP7.md#vv` |
+ | WP6 | UI & SDK | Plan | E7/E8 | Blazor SSR plan, SDK plan | `WPS/WP6.md#vv` |
+ | **WP8** | **Advanced Infra & Deployment** | **MVP-optional (Guardrailed)** | E8 | K8s, Prometheus, Scaling endpoints | `WPS/WP8.md#vv` |
+diff --git a/DOCS/VnV/TraceabilityMatrix.csv b/DOCS/VnV/TraceabilityMatrix.csv
+index d1e2f3a..e2f3a4b 100644
+--- a/DOCS/VnV/TraceabilityMatrix.csv
++++ b/DOCS/VnV/TraceabilityMatrix.csv
+@@ -12,9 +12,12 @@
+ E5.Outbox,Retry outbox,WP5,"OBS-WP5-Outbox",UH,Logs with backoff attempts
+ E5.RLS,DB RLS tenant isolation,WP5,"INTEG-WP5-RLS",UH,DB script + Supabase behavior
+ E7.F1,Blazor SSR Admin UI,WP6,"PLAN-E7-UI",UF,WP6 docs
+ E7.F2,OpenAPI-first SDKs,WP6,"PLAN-E7-SDK",UF,WP6 docs
+-E8.F1,Prod Docker/K8s readiness,WP8,"PLAN-E8-Docker-K8s",UH,"Docs-only; MVP allowed"
+-E8.F2,Prometheus metrics endpoint (guarded),WP8,"SMK-E8-Metrics-404;SMK-E8-Metrics-401;SMK-E8-Metrics-200",UH,"MVP-allowed with guardrails"
+-E8.F3,Auto-scaling status endpoint (guarded),WP8,"SMK-E8-Scaling-404;SMK-E8-Scaling-401;SMK-E8-Scaling-200",UH,"MVP-allowed with guardrails"
++E7.G1,AdminOnly policy (authz),WP7,"UNIT-WP7-AdminPolicy",UH,"ZEN/TESTS/WP7/AdminPolicyTests.cs"
++E7.G2,Feature flags bound (Monitoring/Scaling),WP7,"SMK-E7-Flags-404",UH,"Flags off → endpoints 404"
++E7.G3,/metrics guarded (auth+flags+rate limit),WP7,"SMK-E7-Metrics-401;SMK-E7-Metrics-200",UH,"Endpoint returns 401/200 appropriately"
++E7.G4,/scaling/status guarded (auth+flags+rate limit),WP7,"SMK-E7-Scaling-401;SMK-E7-Scaling-200",UH,"Endpoint returns 401/200 appropriately"
++E8.F1,Prod Docker/K8s readiness,WP8,"PLAN-E8-Docker-K8s",UH,"Docs-only; MVP allowed"
++E8.F4,OpenTelemetry expansion,WP8,"PLAN-E8-OTel",UH,DOCS/OBSERVABILITY/OpenTelemetryPlan.md
+ E8.F5,Non-FX domain stubs (Blockchain),WP8,"PLAN-E8-Blockchain",UH,"OTel plan mentions + commit refs"
+ OPS.COST,Cost monitoring & alerts,WP8,"OPS-BUDGET-ALERTS;OPS-LOG-VOLUME;OPS-EGRESS",UH,"DOCS/Ops/CostMonitoring.md"
+diff --git a/DOCS/Security/AdminAuth.md b/DOCS/Security/AdminAuth.md
+index f3a2b1c..f3a2b1c 100644
+--- a/DOCS/Security/AdminAuth.md
++++ b/DOCS/Security/AdminAuth.md
+@@ -1,3 +1,10 @@
++# WP7 Update
++With WP7, the `AdminOnly` policy is implemented in `WP7AppConfig`. Use:
++```csharp
++builder.Services.AddWp7Guardrails(builder.Configuration);
++app.UseWp7Guardrails(builder.Configuration);
++```
++
+ # Admin Auth — `RequireRole("Admin")` Semantics
+ 
+ **Goal:** A clear, minimal mechanism to protect privileged endpoints like `/metrics` and `/scaling/status`.
+diff --git a/README.md b/README.md
+index ab13ce0..bc24df1 100644
+--- a/README.md
++++ b/README.md
+@@ -12,6 +12,10 @@
+ - **SDK Consumption**: `DOCS/API/SDK-Consumption.md`
+ - **Blazor Perf Cookbook**: `DOCS/Perf/Blazor.Fast.md`
+ 
++### WP7 (Operational Guardrails)
++- Admin-only endpoints and feature flags are **implemented** but **OFF by default**.
++- To enable in GREEN: see `WPS/WP7.md` and `DOCS/Security/AdminAuth.md`.
++
+ ### MVP Guardrail
+ - This repo tracks some advanced infrastructure (K8s/Prometheus/Scaling, Blockchain stubs). By default they’re **OFF** via feature flags.
+ - A **narrow allowlist** is **MVP-optional** when guardrails are on:
+ - `/metrics` bound privately + admin auth

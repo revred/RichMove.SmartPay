@@ -70,6 +70,9 @@ builder.Services.AddWp4Features(builder.Configuration);
 // WP5: Event Bridge & Tenant Isolation (webhooks, RLS)
 builder.Services.AddWp5Features(builder.Configuration);
 
+// WP7: Operational Guardrails (admin auth, feature flags, guarded endpoints)
+builder.Services.AddWp7Guardrails(builder.Configuration);
+
 var app = builder.Build();
 
 // WP3: wire middleware & feature-flagged ledger binding
@@ -81,6 +84,9 @@ app.UseWp4Features(builder.Configuration);
 
 // WP5: wire event bridge features
 app.UseWp5Features(builder.Configuration);
+
+// WP7: wire guardrails (rate limiting, authorization)
+app.UseWp7Guardrails(builder.Configuration);
 
 // Enable FastEndpoints and Swagger
 app.UseFastEndpoints();

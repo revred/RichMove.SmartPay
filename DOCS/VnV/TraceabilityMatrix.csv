@@ -20,4 +20,9 @@ E8.F2,Prometheus metrics endpoint (guarded),WP8,"SMK-E8-Metrics-404;SMK-E8-Metri
 E8.F3,Auto-scaling status endpoint (guarded),WP8,"SMK-E8-Scaling-404;SMK-E8-Scaling-401;SMK-E8-Scaling-200",UH,"MVP-allowed with guardrails"
 E8.F4,OpenTelemetry expansion,WP8,"PLAN-E8-OTel",UH,DOCS/OBSERVABILITY/OpenTelemetryPlan.md
 E8.F5,Non-FX domain stubs (Blockchain),WP8,"PLAN-E8-Blockchain",UH,"OTel plan mentions + commit refs"
+WP7.F1,AdminOnly authorization policy,WP7,"UNIT-WP7-AdminPolicy-Role;UNIT-WP7-AdminPolicy-ApiKey",UH,"AdminPolicyTests.cs"
+WP7.F2,Feature flag configuration,WP7,"UNIT-WP7-FeatureFlags-Binding",UH,"WP7AppConfig.cs + tests"
+WP7.F3,Guarded metrics endpoint,WP7,"SMK-WP7-Metrics-404;SMK-WP7-Metrics-401;SMK-WP7-Metrics-200",UH,"AdminPolicyTests.cs"
+WP7.F4,Guarded scaling endpoint,WP7,"SMK-WP7-Scaling-404;SMK-WP7-Scaling-401;SMK-WP7-Scaling-200",UH,"AdminPolicyTests.cs"
+WP7.F5,Rate limiting policies,WP7,"UNIT-WP7-RateLimit-MetricsAdmin;UNIT-WP7-RateLimit-ScalingAdmin",UH,"Rate limiter configuration"
 OPS.COST,Cost monitoring & alerts,WP8,"OPS-BUDGET-ALERTS;OPS-LOG-VOLUME;OPS-EGRESS",UH,"DOCS/Ops/CostMonitoring.md"

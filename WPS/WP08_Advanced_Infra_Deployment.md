@@ -1,4 +1,4 @@
-# WP8 — Advanced Infra & Deployment (MVP-optional, Guardrailed)
+# WP08 — Advanced Infra & Deployment (MVP-optional, Guardrailed)
 
 > Purpose: Keep valuable infra pieces **available** but **safe & cheap**. A small allowlist is permitted in MVP when guardrails are on. Everything else remains parked until promoted.
 
