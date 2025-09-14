@@ -16,6 +16,7 @@ using RichMove.SmartPay.Api.Services;
 using RichMove.SmartPay.Api.Validation;
 using RichMove.SmartPay.Api.Infrastructure.Deployment;
 using RichMove.SmartPay.Api.Infrastructure.Scalability;
+using RichMove.SmartPay.Api.Compliance;
 using RichMove.SmartPay.Core.Blockchain;
 using RichMove.SmartPay.Core.Time;
 using RichMove.SmartPay.Infrastructure.Blockchain;
@@ -38,6 +39,10 @@ public static partial class SmartPayHardeningExtensions
         services.Configure<DeploymentOptions>(config.GetSection("Deployment"));
         services.Configure<ScalingOptions>(config.GetSection("Scaling"));
         services.Configure<MetricsOptions>(config.GetSection("Metrics"));
+        services.Configure<SecurityScanOptions>(config.GetSection("SecurityScan"));
+        services.Configure<ComplianceOptions>(config.GetSection("Compliance"));
+        services.Configure<ThreatDetectionOptions>(config.GetSection("ThreatDetection"));
+        services.Configure<SecurityPolicyOptions>(config.GetSection("SecurityPolicy"));
 
         // Clock abstraction
         services.AddSingleton<IClock, SystemClock>();
@@ -80,6 +85,12 @@ public static partial class SmartPayHardeningExtensions
         services.AddSingleton<PrometheusMetricsService>();
         services.AddSingleton<KubernetesDeploymentService>();
         services.AddHostedService<AutoScalingService>();
+
+        // Group 9: Advanced Security & Compliance services
+        services.AddHostedService<SecurityScanningService>();
+        services.AddHostedService<ComplianceMonitoringService>();
+        services.AddHostedService<ThreatDetectionService>();
+        services.AddHostedService<SecurityPolicyEngine>();
 
         return services;
     }
