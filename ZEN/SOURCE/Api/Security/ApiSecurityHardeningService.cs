@@ -59,7 +59,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
                 new KeyValuePair<string, object?>("method", context.Request.Method));
 
             // IP-based security checks
-            var ipCheck = await ValidateIpAddressAsync(context);
+            var ipCheck = ValidateIpAddressAsync(context);
             if (!ipCheck.IsAllowed)
             {
                 result.IsAllowed = false;
@@ -82,7 +82,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
             // API Key validation
             if (result.IsAllowed && _options.RequireApiKey)
             {
-                var apiKeyCheck = await ValidateApiKeyAsync(context);
+                var apiKeyCheck = ValidateApiKeyAsync(context);
                 if (!apiKeyCheck.IsAllowed)
                 {
                     result.IsAllowed = false;
@@ -122,7 +122,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
             // Anomaly detection
             if (result.IsAllowed && _options.EnableAnomalyDetection)
             {
-                var anomalyCheck = await DetectAnomaliesAsync(context);
+                var anomalyCheck = DetectAnomaliesAsync(context);
                 if (anomalyCheck.AnomalyScore > _options.AnomalyThreshold)
                 {
                     result.AnomalyScore = anomalyCheck.AnomalyScore;
@@ -142,7 +142,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
                     new KeyValuePair<string, object?>("reason", result.SecurityLevel.ToString()),
                     new KeyValuePair<string, object?>("endpoint", context.Request.Path.ToString()));
 
-                await LogSecurityEventAsync(context, result);
+                LogSecurityEventAsync(context, result);
             }
 
             return result;
@@ -153,7 +153,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         }
     }
 
-    private async Task<SecurityCheckResult> ValidateIpAddressAsync(HttpContext context)
+    private SecurityCheckResult ValidateIpAddressAsync(HttpContext context)
     {
         var result = new SecurityCheckResult { IsAllowed = true };
         var clientIp = GetClientIpAddress(context);
@@ -184,7 +184,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         // Geographic restrictions
         if (_options.EnableGeographicRestrictions)
         {
-            var geoCheck = await ValidateGeographicLocationAsync(clientIp);
+            var geoCheck = ValidateGeographicLocationAsync(clientIp);
             if (!geoCheck.IsAllowed)
             {
                 result.IsAllowed = false;
@@ -225,7 +225,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         return Task.FromResult(result);
     }
 
-    private async Task<SecurityCheckResult> ValidateApiKeyAsync(HttpContext context)
+    private SecurityCheckResult ValidateApiKeyAsync(HttpContext context)
     {
         var result = new SecurityCheckResult { IsAllowed = true };
 
@@ -239,7 +239,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
 
         _apiKeyValidationCount.Add(1);
 
-        var apiKeyInfo = await GetApiKeyInfoAsync(apiKey);
+        var apiKeyInfo = GetApiKeyInfoAsync(apiKey);
         if (apiKeyInfo == null)
         {
             result.IsAllowed = false;
@@ -365,7 +365,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         return result;
     }
 
-    private async Task<AnomalyDetectionResult> DetectAnomaliesAsync(HttpContext context)
+    private AnomalyDetectionResult DetectAnomaliesAsync(HttpContext context)
     {
         var result = new AnomalyDetectionResult();
         var clientIp = GetClientIpAddress(context);
@@ -471,7 +471,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         return 0.0;
     }
 
-    private async Task<SecurityCheckResult> ValidateGeographicLocationAsync(string ipAddress)
+    private SecurityCheckResult ValidateGeographicLocationAsync(string ipAddress)
     {
         var result = new SecurityCheckResult { IsAllowed = true };
 
@@ -558,7 +558,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         return queryKey;
     }
 
-    private async Task<ApiKeyInfo?> GetApiKeyInfoAsync(string apiKey)
+    private ApiKeyInfo? GetApiKeyInfoAsync(string apiKey)
     {
         if (_apiKeyCache.TryGetValue(apiKey, out var cached))
         {
@@ -603,7 +603,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         return body;
     }
 
-    private async Task LogSecurityEventAsync(HttpContext context, SecurityCheckResult result)
+    private void LogSecurityEventAsync(HttpContext context, SecurityCheckResult result)
     {
         var securityEvent = new ApiSecurityEvent
         {

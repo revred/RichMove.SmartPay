@@ -77,12 +77,12 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
                 ProcessedAt = DateTime.UtcNow
             };
 
-            await CheckRateLimit(context);
+            CheckRateLimit(context);
 
             var threats = await DetectThreatsAsync(input, context);
             result.DetectedThreats.AddRange(threats);
 
-            var sanitized = await ApplySanitizationAsync(input, context, threats);
+            var sanitized = ApplySanitizationAsync(input, context, threats);
             result.SanitizedValue = sanitized;
             result.IsClean = threats.Count == 0;
             result.WasModified = !string.Equals(input, sanitized, StringComparison.Ordinal);
@@ -163,7 +163,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
         return threats;
     }
 
-    private async Task<string> ApplySanitizationAsync(string input, SanitizationContext context, List<SecurityThreat> threats)
+    private string ApplySanitizationAsync(string input, SanitizationContext context, List<SecurityThreat> threats)
     {
         var sanitized = input;
 
@@ -191,7 +191,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
 
         foreach (var threat in threats.Where(t => t.Severity >= ThreatSeverity.High))
         {
-            sanitized = await ApplyThreatSpecificSanitization(sanitized, threat);
+            sanitized = ApplyThreatSpecificSanitization(sanitized, threat);
         }
 
         return sanitized;
@@ -262,7 +262,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
         return sanitized;
     }
 
-    private async Task<string> ApplyThreatSpecificSanitization(string input, SecurityThreat threat)
+    private string ApplyThreatSpecificSanitization(string input, SecurityThreat threat)
     {
         return threat.Type switch
         {
@@ -276,7 +276,7 @@ public sealed partial class AdvancedInputSanitizationService : IHostedService, I
         };
     }
 
-    private async Task CheckRateLimit(SanitizationContext context)
+    private void CheckRateLimit(SanitizationContext context)
     {
         if (string.IsNullOrEmpty(context.ClientIP)) return;
 

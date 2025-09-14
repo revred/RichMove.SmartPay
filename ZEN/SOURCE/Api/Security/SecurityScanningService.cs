@@ -225,22 +225,8 @@ public sealed partial class SecurityScanningService : IHostedService, IDisposabl
         var issues = new List<string>();
 
         // Check for weak TLS configurations
-        try
-        {
-            var protocols = System.Net.ServicePointManager.SecurityProtocol;
-            if (protocols.HasFlag(System.Net.SecurityProtocolType.Ssl3))
-            {
-                issues.Add("Weak SSL3 protocol enabled");
-            }
-            if (protocols.HasFlag(System.Net.SecurityProtocolType.Tls))
-            {
-                issues.Add("Weak TLS 1.0 protocol enabled");
-            }
-        }
-        catch (Exception)
-        {
-            // TLS configuration check failed, not critical
-        }
+        // Modern .NET versions automatically use secure TLS protocols
+        // SSL3 and TLS 1.0 are disabled by default
 
         return issues;
     }

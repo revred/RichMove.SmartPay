@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Reflection;
 using System.Security.Claims;
@@ -77,7 +78,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
 
                 if (rule.AutoEscalate)
                 {
-                    await EscalateSecurityIncidentAsync(auditEvent, rule);
+                    EscalateSecurityIncidentAsync(auditEvent, rule);
                 }
             }
         }
@@ -102,11 +103,11 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         // Immediate processing for critical events
         if (auditEvent.Severity == AuditSeverity.Critical)
         {
-            await ProcessCriticalEventAsync(auditEvent);
+            ProcessCriticalEventAsync(auditEvent);
         }
     }
 
-    public async Task<SecurityAuditReport> GenerateAuditReportAsync(DateTime? startDate = null, DateTime? endDate = null)
+    public SecurityAuditReport GenerateAuditReportAsync(DateTime? startDate = null, DateTime? endDate = null)
     {
         var start = startDate ?? DateTime.UtcNow.AddDays(-7);
         var end = endDate ?? DateTime.UtcNow;
@@ -149,7 +150,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         report.AccessPatterns = AnalyzeAccessPatterns(events);
 
         // Risk assessment
-        report.RiskAssessment = await PerformRiskAssessmentAsync(events);
+        report.RiskAssessment = PerformRiskAssessmentAsync(events);
 
         // Recommendations
         report.SecurityRecommendations = GenerateSecurityRecommendations(events, report.RiskAssessment);
@@ -160,7 +161,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         return report;
     }
 
-    public async Task<List<SecurityAnomalyDetection>> DetectAnomaliesAsync()
+    public List<SecurityAnomalyDetection> DetectAnomaliesAsync()
     {
         var anomalies = new List<SecurityAnomalyDetection>();
         var recentEvents = GetRecentAuditEvents(TimeSpan.FromHours(24));
@@ -194,7 +195,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         return anomalies;
     }
 
-    public async Task<ComplianceReport> GenerateComplianceReportAsync(ComplianceFramework framework)
+    public ComplianceReport GenerateComplianceReportAsync(ComplianceFramework framework)
     {
         var report = new ComplianceReport
         {
@@ -208,16 +209,16 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         switch (framework)
         {
             case ComplianceFramework.GDPR:
-                report = await GenerateGDPRComplianceReport(events, report);
+                report = GenerateGDPRComplianceReport(events, report);
                 break;
             case ComplianceFramework.PCI_DSS:
-                report = await GeneratePCIComplianceReport(events, report);
+                report = GeneratePCIComplianceReport(events, report);
                 break;
             case ComplianceFramework.SOX:
-                report = await GenerateSOXComplianceReport(events, report);
+                report = GenerateSOXComplianceReport(events, report);
                 break;
             case ComplianceFramework.HIPAA:
-                report = await GenerateHIPAAComplianceReport(events, report);
+                report = GenerateHIPAAComplianceReport(events, report);
                 break;
         }
 
@@ -235,8 +236,8 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
                 Severity = AuditSeverity.High,
                 IsEnabled = true,
                 AutoEscalate = true,
-                MatchCondition = async (e) => e.EventType == AuditEventType.Authentication &&
-                                             e.Details.Contains("failed", StringComparison.OrdinalIgnoreCase)
+                MatchCondition = (e) => Task.FromResult(e.EventType == AuditEventType.Authentication &&
+                                             e.Details.Contains("failed", StringComparison.OrdinalIgnoreCase))
             },
 
             new SecurityAuditRule
@@ -246,7 +247,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
                 Severity = AuditSeverity.Critical,
                 IsEnabled = true,
                 AutoEscalate = true,
-                MatchCondition = async (e) => e.EventType == AuditEventType.PrivilegeEscalation
+                MatchCondition = (e) => Task.FromResult(e.EventType == AuditEventType.PrivilegeEscalation)
             },
 
             new SecurityAuditRule
@@ -256,8 +257,8 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
                 Severity = AuditSeverity.High,
                 IsEnabled = true,
                 AutoEscalate = false,
-                MatchCondition = async (e) => e.EventType == AuditEventType.ConfigurationChange &&
-                                             e.Details.Contains("admin", StringComparison.OrdinalIgnoreCase)
+                MatchCondition = (e) => Task.FromResult(e.EventType == AuditEventType.ConfigurationChange &&
+                                             e.Details.Contains("admin", StringComparison.OrdinalIgnoreCase))
             },
 
             new SecurityAuditRule
@@ -267,9 +268,9 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
                 Severity = AuditSeverity.Medium,
                 IsEnabled = true,
                 AutoEscalate = false,
-                MatchCondition = async (e) => e.EventType == AuditEventType.DataAccess &&
+                MatchCondition = (e) => Task.FromResult(e.EventType == AuditEventType.DataAccess &&
                                              (e.Resource.Contains("payment", StringComparison.OrdinalIgnoreCase) ||
-                                              e.Resource.Contains("personal", StringComparison.OrdinalIgnoreCase))
+                                              e.Resource.Contains("personal", StringComparison.OrdinalIgnoreCase)))
             },
 
             new SecurityAuditRule
@@ -279,10 +280,9 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
                 Severity = AuditSeverity.Medium,
                 IsEnabled = true,
                 AutoEscalate = false,
-                MatchCondition = async (e) =>
-                {
+                MatchCondition = (e) => {
                     var hour = e.Timestamp.Hour;
-                    return e.EventType == AuditEventType.SystemAccess && (hour < 6 || hour > 22);
+                    return Task.FromResult(e.EventType == AuditEventType.SystemAccess && (hour < 6 || hour > 22));
                 }
             }
         });
@@ -421,7 +421,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         return patterns;
     }
 
-    private async Task<RiskAssessment> PerformRiskAssessmentAsync(List<ComprehensiveAuditEvent> events)
+    private RiskAssessment PerformRiskAssessmentAsync(List<ComprehensiveAuditEvent> events)
     {
         var riskScore = 0.0;
         var riskFactors = new List<string>();
@@ -507,7 +507,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         return recommendations;
     }
 
-    private async Task<ComplianceReport> GenerateGDPRComplianceReport(List<ComprehensiveAuditEvent> events, ComplianceReport report)
+    private ComplianceReport GenerateGDPRComplianceReport(List<ComprehensiveAuditEvent> events, ComplianceReport report)
     {
         // GDPR-specific compliance checks
         var dataAccessEvents = events.Where(e => e.EventType == AuditEventType.DataAccess).ToList();
@@ -524,7 +524,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         return report;
     }
 
-    private async Task<ComplianceReport> GeneratePCIComplianceReport(List<ComprehensiveAuditEvent> events, ComplianceReport report)
+    private ComplianceReport GeneratePCIComplianceReport(List<ComprehensiveAuditEvent> events, ComplianceReport report)
     {
         // PCI DSS-specific compliance checks
         report.ComplianceScore = 0.90; // Placeholder
@@ -533,7 +533,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         return report;
     }
 
-    private async Task<ComplianceReport> GenerateSOXComplianceReport(List<ComprehensiveAuditEvent> events, ComplianceReport report)
+    private ComplianceReport GenerateSOXComplianceReport(List<ComprehensiveAuditEvent> events, ComplianceReport report)
     {
         // SOX-specific compliance checks
         report.ComplianceScore = 0.88; // Placeholder
@@ -542,7 +542,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         return report;
     }
 
-    private async Task<ComplianceReport> GenerateHIPAAComplianceReport(List<ComprehensiveAuditEvent> events, ComplianceReport report)
+    private ComplianceReport GenerateHIPAAComplianceReport(List<ComprehensiveAuditEvent> events, ComplianceReport report)
     {
         // HIPAA-specific compliance checks
         report.ComplianceScore = 0.92; // Placeholder
@@ -564,7 +564,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         return _auditQueue.Where(e => e.Timestamp >= cutoff).ToList();
     }
 
-    private async Task ProcessCriticalEventAsync(ComprehensiveAuditEvent auditEvent)
+    private void ProcessCriticalEventAsync(ComprehensiveAuditEvent auditEvent)
     {
         // Immediate processing for critical security events
         _logger.LogCritical("CRITICAL SECURITY EVENT: {EventType} - {Details}",
@@ -578,17 +578,17 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
 
         if (_options.AutoResponseEnabled)
         {
-            await TriggerAutomatedResponseAsync(auditEvent);
+            TriggerAutomatedResponseAsync(auditEvent);
         }
     }
 
-    private async Task TriggerAutomatedResponseAsync(ComprehensiveAuditEvent auditEvent)
+    private void TriggerAutomatedResponseAsync(ComprehensiveAuditEvent auditEvent)
     {
         // Placeholder for automated security responses
         _logger.LogWarning("Automated security response triggered for event {AuditId}", auditEvent.AuditId);
     }
 
-    private async Task EscalateSecurityIncidentAsync(ComprehensiveAuditEvent auditEvent, SecurityAuditRule rule)
+    private void EscalateSecurityIncidentAsync(ComprehensiveAuditEvent auditEvent, SecurityAuditRule rule)
     {
         // Placeholder for security incident escalation
         _logger.LogWarning("Security incident escalated: Rule {RuleName} triggered by event {AuditId}",
@@ -605,7 +605,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         var processedCount = 0;
         var events = new List<ComprehensiveAuditEvent>();
 
-        using var activity = Activity.StartActivity("ProcessAuditEvents");
+        using var activity = Activity.Current?.Source?.StartActivity("ProcessAuditEvents");
         var stopwatch = Stopwatch.StartNew();
 
         try
@@ -637,24 +637,24 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         {
             var key = $"{evt.EventType}:{DateTime.UtcNow:yyyy-MM-dd-HH}";
             _securityMetrics.AddOrUpdate(key,
-                new SecurityMetrics { Count = 1, LastUpdated = DateTime.UtcNow },
+                new SecurityMetrics(1, DateTime.UtcNow),
                 (_, existing) => existing with { Count = existing.Count + 1, LastUpdated = DateTime.UtcNow });
         }
     }
 
     private void GenerateSecurityReport(object? state)
     {
-        _ = Task.Run(async () =>
+        _ = Task.Run(() =>
         {
             try
             {
-                var report = await GenerateAuditReportAsync();
+                var report = GenerateAuditReportAsync();
                 if (_options.AutoGenerateReports)
                 {
-                    await SaveSecurityReportAsync(report);
+                    SaveSecurityReportAsync(report);
                 }
 
-                var anomalies = await DetectAnomaliesAsync();
+                var anomalies = DetectAnomaliesAsync();
                 if (anomalies.Any(a => a.Severity >= AuditSeverity.High))
                 {
                     _logger.LogWarning("Detected {Count} high-severity security anomalies",
@@ -668,7 +668,7 @@ public sealed class ComprehensiveSecurityAuditService : IHostedService, IDisposa
         });
     }
 
-    private async Task SaveSecurityReportAsync(SecurityAuditReport report)
+    private void SaveSecurityReportAsync(SecurityAuditReport report)
     {
         // In a real implementation, you would save the report to persistent storage
         var reportJson = JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true });

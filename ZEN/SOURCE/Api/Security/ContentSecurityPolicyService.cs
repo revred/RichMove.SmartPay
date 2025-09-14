@@ -109,7 +109,7 @@ public sealed class ContentSecurityPolicyService : IHostedService, IDisposable
         return nonce;
     }
 
-    public async Task ProcessViolationReportAsync(CspViolationReport report)
+    public void ProcessViolationReportAsync(CspViolationReport report)
     {
         _violationQueue.Enqueue(report);
 
@@ -123,7 +123,7 @@ public sealed class ContentSecurityPolicyService : IHostedService, IDisposable
 
         if (_options.AutoUpdatePolicy)
         {
-            await UpdatePolicyFromViolation(report);
+            UpdatePolicyFromViolation(report);
         }
     }
 
@@ -272,7 +272,7 @@ public sealed class ContentSecurityPolicyService : IHostedService, IDisposable
         }
     }
 
-    private async Task UpdatePolicyFromViolation(CspViolationReport report)
+    private void UpdatePolicyFromViolation(CspViolationReport report)
     {
         if (string.IsNullOrEmpty(report.ViolatedDirective) || string.IsNullOrEmpty(report.BlockedUri))
             return;
