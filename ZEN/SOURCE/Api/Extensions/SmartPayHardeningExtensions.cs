@@ -48,6 +48,11 @@ public static partial class SmartPayHardeningExtensions
         services.Configure<MetricsDashboardOptions>(config.GetSection("MetricsDashboard"));
         services.Configure<AdvancedHealthCheckOptions>(config.GetSection("AdvancedHealthCheck"));
         services.Configure<PerformanceProfilingOptions>(config.GetSection("PerformanceProfiling"));
+        services.Configure<InputSanitizationOptions>(config.GetSection("InputSanitization"));
+        services.Configure<SecurityHeadersOptions>(config.GetSection("SecurityHeaders"));
+        services.Configure<ContentSecurityPolicyOptions>(config.GetSection("ContentSecurityPolicy"));
+        services.Configure<ApiSecurityHardeningOptions>(config.GetSection("ApiSecurityHardening"));
+        services.Configure<SecurityAuditOptions>(config.GetSection("SecurityAudit"));
 
         // Clock abstraction
         services.AddSingleton<IClock, SystemClock>();
@@ -104,6 +109,12 @@ public static partial class SmartPayHardeningExtensions
         services.AddHostedService<AdvancedHealthCheckService>();
         services.AddHostedService<PerformanceProfilingService>();
 
+        // Group 11: Final Security & Audit services (Items 96-100/100)
+        services.AddHostedService<AdvancedInputSanitizationService>();
+        services.AddSingleton<ContentSecurityPolicyService>();
+        services.AddHostedService<ApiSecurityHardeningService>();
+        services.AddHostedService<ComprehensiveSecurityAuditService>();
+
         return services;
     }
 
@@ -119,6 +130,9 @@ public static partial class SmartPayHardeningExtensions
 
         // Cold-start tracking (early in pipeline)
         app.UseMiddleware<ColdStartMiddleware>();
+
+        // Security headers (early in pipeline for all responses)
+        app.UseMiddleware<SecurityHeadersMiddleware>();
 
         // Correlation ID
         app.UseMiddleware<CorrelationIdMiddleware>();

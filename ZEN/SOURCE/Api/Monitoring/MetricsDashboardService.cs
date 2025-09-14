@@ -24,7 +24,7 @@ public sealed partial class MetricsDashboardService : IHostedService, IDisposabl
     private readonly ConcurrentDictionary<string, MetricTimeSeries> _metrics;
     private readonly ConcurrentDictionary<string, Dashboard> _dashboards;
     private readonly ConcurrentDictionary<string, AlertRule> _alertRules;
-    private readonly ConcurrentQueue<Alert> _activeAlerts;
+    private readonly ConcurrentQueue<Alert> _alertQueue;
     private readonly ConcurrentQueue<MetricDataPoint> _rawMetrics;
 
     public MetricsDashboardService(
@@ -37,7 +37,7 @@ public sealed partial class MetricsDashboardService : IHostedService, IDisposabl
         _metrics = new ConcurrentDictionary<string, MetricTimeSeries>();
         _dashboards = new ConcurrentDictionary<string, Dashboard>();
         _alertRules = new ConcurrentDictionary<string, AlertRule>();
-        _activeAlerts = new ConcurrentQueue<Alert>();
+        _alertQueue = new ConcurrentQueue<Alert>();
         _rawMetrics = new ConcurrentQueue<MetricDataPoint>();
 
         _meter = new Meter("richmove.smartpay.dashboards");
@@ -372,7 +372,7 @@ public sealed partial class MetricsDashboardService : IHostedService, IDisposabl
             IsActive = true
         };
 
-        _activeAlerts.Enqueue(alert);
+        _alertQueue.Enqueue(alert);
 
         _alertsFired.Add(1,
             new KeyValuePair<string, object?>("rule", rule.Id),
@@ -385,7 +385,7 @@ public sealed partial class MetricsDashboardService : IHostedService, IDisposabl
     {
         await Task.Delay(5);
 
-        var activeAlertsCount = _activeAlerts.Count(a => a.IsActive);
+        var activeAlertsCount = _alertQueue.Count(a => a.IsActive);
         _activeAlerts.Record(activeAlertsCount);
     }
 
@@ -455,7 +455,7 @@ public sealed partial class MetricsDashboardService : IHostedService, IDisposabl
 
     public List<Alert> GetActiveAlerts()
     {
-        return _activeAlerts.Where(a => a.IsActive).ToList();
+        return _alertQueue.Where(a => a.IsActive).ToList();
     }
 
     public MetricsDashboardStatus GetDashboardStatus()
@@ -464,7 +464,7 @@ public sealed partial class MetricsDashboardService : IHostedService, IDisposabl
         {
             DashboardCount = _dashboards.Count,
             AlertRuleCount = _alertRules.Count,
-            ActiveAlertCount = _activeAlerts.Count(a => a.IsActive),
+            ActiveAlertCount = _alertQueue.Count(a => a.IsActive),
             MetricTimeSeriesCount = _metrics.Count,
             QueuedMetrics = _rawMetrics.Count,
             IsHealthy = _rawMetrics.Count < _options.MaxQueuedMetrics,

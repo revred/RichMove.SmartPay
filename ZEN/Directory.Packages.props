@@ -30,6 +30,7 @@
     <PackageVersion Include="Npgsql" Version="8.0.5" />
     <PackageVersion Include="Microsoft.Extensions.Options" Version="9.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0" />
+    <PackageVersion Include="System.Diagnostics.PerformanceCounter" Version="9.0.1" />
     <!-- Performance Testing -->
     <PackageVersion Include="YamlDotNet" Version="13.7.1" />
   </ItemGroup>

@@ -14,6 +14,7 @@
     <PackageReference Include="Npgsql" />
     <PackageReference Include="Polly.Extensions.Http" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" />
   </ItemGroup>
 
   <ItemGroup>

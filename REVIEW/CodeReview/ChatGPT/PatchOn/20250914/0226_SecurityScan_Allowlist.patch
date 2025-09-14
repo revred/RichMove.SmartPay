@@ -1,0 +1,81 @@
+From 0226babe1234567890abcdefabcdefabcdefabcd Mon Sep 17 00:00:00 2001
+From: ChatGPT <dev@richmove.co.uk>
+Date: Sun, 14 Sep 2025 02:26:00 +0100
+Subject: [PATCH] ci(security): Add dedicated Gitleaks scan w/ allowlist;
+ honour SECRETS.end + ignore .claude/
+
+Context:
+- `SECRETS.end` is an **encrypted** bundle by design (kept in repo).
+- `.claude/` once slipped into history before .gitignore landed.
+- Repo already has `.gitleaks.toml`; we add a focused workflow and a
+  repo-level `.gitleaksignore` so scans don't flag the encrypted file
+  or local AI workspace.
+
+This patch is additive and doesn't alter existing CI pipelines.
+---
+ .gitleaksignore                              |  6 ++++++
+ .github/workflows/secret_scan.yml            | 42 ++++++++++++++++++++++++++++
+ 2 files changed, 48 insertions(+)
+ create mode 100644 .gitleaksignore
+ create mode 100644 .github/workflows/secret_scan.yml
+
+diff --git a/.gitleaksignore b/.gitleaksignore
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/.gitleaksignore
+@@ -0,0 +1,6 @@
++# Paths excluded from Gitleaks scans (encrypted or local-only assets)
++# Encrypted secrets bundle: tracked by design
++SECRETS.end
++
++# Local AI/editor workspaces (historical noise)
++.claude/
+diff --git a/.github/workflows/secret_scan.yml b/.github/workflows/secret_scan.yml
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/.github/workflows/secret_scan.yml
+@@ -0,0 +1,42 @@
++name: secret-scan
++
++on:
++  push:
++    branches: [ "master", "main" ]
++  pull_request:
++    branches: [ "master", "main" ]
++
++permissions:
++  contents: read
++  security-events: write
++
++jobs:
++  gitleaks:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++
++      - name: Gitleaks (respect .gitleaksignore)
++        uses: gitleaks/gitleaks-action@v2
++        env:
++          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
++        with:
++          # Use repo-provided rules, redact matches, ignore encrypted bundle
++          args: >
++            detect
++            --no-banner
++            --redact
++            --report-format sarif
++            --report-path gitleaks.sarif
++            --config .gitleaks.toml
++            --exclude-paths .gitleaksignore
++
++      - name: Upload SARIF to code scanning
++        uses: github/codeql-action/upload-sarif@v3
++        with:
++          sarif_file: gitleaks.sarif
++
+-- 
+2.45.0

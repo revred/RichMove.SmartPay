@@ -1,0 +1,6 @@
+# Paths excluded from Gitleaks scans (encrypted or local-only assets)
+# Encrypted secrets bundle: tracked by design
+SECRETS.end
+
+# Local AI/editor workspaces (historical noise)
+.claude/
