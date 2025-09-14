@@ -1,0 +1,5 @@
+fx_quote:
+  p95_ms: 120.0
+  p99_ms: 160.0
+  source: "Initial local best on Null providers"
+  timestamp: "2025-09-14T00:00:00Z"

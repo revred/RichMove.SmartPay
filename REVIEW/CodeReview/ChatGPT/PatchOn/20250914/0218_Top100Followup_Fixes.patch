@@ -1,0 +1,160 @@
+From 0218abcd1234567890abcdefabcdefabcdefabcd Mon Sep 17 00:00:00 2001
+From: ChatGPT <dev@richmove.co.uk>
+Date: Sun, 14 Sep 2025 02:18:00 +0100
+Subject: [PATCH] chore(ci,secrets): Harden CI, add secrets hygiene; post-Top100
+ follow-ups
+
+ Add a new CI workflow that enforces build, format, tests, and a sane 60% line
+ coverage gate (aligned with README). Adds gitleaks to prevent secret
+ regressions. Introduces a `secrets/.gitignore` to keep real env files out of
+ the repo and provides a canonical sample env file for RED (dev) env.
+ 
+ This patch avoids touching existing files to apply cleanly; once merged, the
+ new workflow can replace any older CI as desired.
+
+---
+ .github/workflows/ci_hardened.yml                 | 116 ++++++++++++++++++++++
+ secrets/.gitignore                                 |   9 ++
+ secrets/SMARTPAY-RED.secrets.env.sample            |  24 +++++
+ 3 files changed, 149 insertions(+)
+ create mode 100644 .github/workflows/ci_hardened.yml
+ create mode 100644 secrets/.gitignore
+ create mode 100644 secrets/SMARTPAY-RED.secrets.env.sample
+
+diff --git a/.github/workflows/ci_hardened.yml b/.github/workflows/ci_hardened.yml
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/.github/workflows/ci_hardened.yml
+@@ -0,0 +1,116 @@
++name: ci-hardened
++
++on:
++  push:
++    branches: [ "master", "main" ]
++  pull_request:
++    branches: [ "master", "main" ]
++
++permissions:
++  contents: read
++
++jobs:
++  build_test:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++
++      - name: Setup .NET 9
++        uses: actions/setup-dotnet@v5
++        with:
++          dotnet-version: |
++            9.0.x
++
++      - name: Restore
++        run: dotnet restore ZEN/RichMove.SmartPay.sln
++
++      - name: Build (Release, warn as error)
++        run: dotnet build ZEN/RichMove.SmartPay.sln --configuration Release -warnaserror --no-restore
++
++      - name: Format Check
++        run: dotnet format ZEN/RichMove.SmartPay.sln --verify-no-changes
++
++      - name: Test with coverage (Cobertura)
++        run: |
++          dotnet test ZEN/RichMove.SmartPay.sln --no-build --configuration Release \
++            /p:CollectCoverage=true \
++            /p:CoverletOutputFormat=cobertura \
++            /p:CoverletOutput=./TestResults/ \
++            /p:Exclude="[*]*.Migrations.*"
++
++      - name: Generate & publish coverage report
++        uses: danielpalme/ReportGenerator-GitHub-Action@5.3.8
++        with:
++          reports: '**/TestResults/coverage.cobertura.xml'
++          targetdir: 'CoverageReport'
++          reporttypes: 'HtmlInline;Cobertura;Badges'
++          verbosity: 'Info'
++
++      - name: Enforce coverage gate (>= 60% line)
++        shell: bash
++        run: |
++          FILE=$(git ls-files '**/TestResults/coverage.cobertura.xml' | head -n 1)
++          if [ -z "$FILE" ]; then
++            echo "coverage.cobertura.xml not found"; exit 1
++          fi
++          RATE=$(grep -oP 'line-rate="\\K[^"]+' "$FILE" | head -1)
++          PCT=$(python - << 'PY'\nprint(int(float(\"$RATE\")*100))\nPY\n)
++          echo \"Coverage: ${PCT}%\"
++          if [ \"$PCT\" -lt 60 ]; then
++            echo \"Coverage ${PCT}% is below threshold of 60%\"; exit 1; fi
++
++      - name: Upload coverage artifacts
++        uses: actions/upload-artifact@v4
++        with:
++          name: coverage-report
++          path: CoverageReport/
++
++  gitleaks:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Run gitleaks
++        uses: gitleaks/gitleaks-action@v2
++        env:
++          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
++        with:
++          args: detect --no-banner --redact --report-format sarif --report-path gitleaks.sarif
++      - name: Upload gitleaks report
++        uses: github/codeql-action/upload-sarif@v3
++        with:
++          sarif_file: gitleaks.sarif
++
+diff --git a/secrets/.gitignore b/secrets/.gitignore
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/secrets/.gitignore
+@@ -0,0 +1,9 @@
++# Ignore real env files; only commit samples
++*.env
++*.secrets.env
++*.local.env
++
++# But keep the samples
++!*.sample
++!*.example
++!.keep
+diff --git a/secrets/SMARTPAY-RED.secrets.env.sample b/secrets/SMARTPAY-RED.secrets.env.sample
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/secrets/SMARTPAY-RED.secrets.env.sample
+@@ -0,0 +1,24 @@
++# RED (dev) environment sample secrets for RichMove.SmartPay
++# Copy to secrets/SMARTPAY-RED.secrets.env and fill in real values. DO NOT COMMIT the real file.
++
++# Supabase
++SUPABASE_ENABLED=false
++SUPABASE_URL=
++SUPABASE_ANON_KEY=
++
++# FX Pricing (fallback mode)
++FX_MARKUP_BPS=25
++FX_FIXED_FEE_MINOR_UNITS=99
++
++# Shopify (placeholder)
++SHOPIFY_BASE_URL=
++SHOPIFY_ACCESS_TOKEN=
++
++# ASP.NET Core
++ASPNETCORE_ENVIRONMENT=Development
++ASPNETCORE_URLS=http://localhost:5000
++
++# Logging
++LOG__LEVEL__DEFAULT=Information
++LOG__LEVEL__MICROSOFT=Warning
++
+-- 
+2.45.0

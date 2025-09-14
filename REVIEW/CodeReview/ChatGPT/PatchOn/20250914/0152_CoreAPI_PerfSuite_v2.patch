@@ -1,0 +1,283 @@
+diff --git a/ANALYSIS/PERF/ServiceGuarantees.md b/ANALYSIS/PERF/ServiceGuarantees.md
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ANALYSIS/PERF/ServiceGuarantees.md
+@@ -0,0 +1,98 @@
++# Service Guarantees & Performance Gates (Core API)
++
++**Objective:** Detect regressions early, enforce absolute performance budgets, and track *best-known* results so we can tell whether a slowdown is due to code or load.
++
++> **Release mode only:** All measurements and CI runs are performed against **Release** builds.
++
++## SLO / SLI targets (Null providers, single-instance)
++
++| Endpoint            | SLI                          | Target      | Window |
++|---------------------|------------------------------|-------------|--------|
++| `POST /fx/quote`    | p95 latency (ms)             | ≤ 150 ms    | CI run |
++|                     | p99 latency (ms)             | ≤ 200 ms    | CI run |
++|                     | Error rate (%)               | < 0.1 %     | CI run |
++
++> These are **dev/CI baselines** with Null providers. Real provider latencies will be tracked separately once integrated.
++
++## Gates
++1. **Absolute**: if p95 or p99 exceeds targets, the perf job fails.
++2. **Regression budget**: if a `BestKnown.yaml` exists, p95/p99 must not degrade by more than **15%** compared to best-known. (Set per-endpoint in `PerfGate.yaml`.)
++
++## Workflow (CI)
++1. CI builds and runs the API with `-c Release` on `http://localhost:5000`.
++2. Perf runner generates traffic at a fixed RPS and duration, captures latencies, computes p50/p90/p95/p99, error rate.
++3. Results are compared against `PerfGate.yaml` (absolute) and `BestKnown.yaml` (regression).
++4. Artifacts (JSON + markdown report) are uploaded for review.
++
++## Files
++- `ANALYSIS/PERF/PerfGate.yaml` — absolute thresholds and regression budgets (source of truth).
++- `ANALYSIS/PERF/Baselines/BestKnown.sample.yaml` — template; copy to `BestKnown.yaml` after an accepted green run to start regression tracking.
++
++## Interpreting failures
++- **Absolute fail** → likely code regression or environment slowdown. Inspect logs & CPU/memory in the runner output.
++- **Regression fail** but absolute ok → likely small performance drift; investigate recent changes or increased allocations.
++
++
+diff --git a/ANALYSIS/PERF/PerfGate.yaml b/ANALYSIS/PERF/PerfGate.yaml
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ANALYSIS/PERF/PerfGate.yaml
+@@ -0,0 +1,10 @@
++targets:
++  fx_quote:
++    absolute:
++      p95_ms: 150
++      p99_ms: 200
++      error_rate_pct: 0.1
++    regression_budget_pct:
++      p95: 15
++      p99: 15
++
+diff --git a/ANALYSIS/PERF/Baselines/BestKnown.sample.yaml b/ANALYSIS/PERF/Baselines/BestKnown.sample.yaml
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ANALYSIS/PERF/Baselines/BestKnown.sample.yaml
+@@ -0,0 +1,7 @@
++fx_quote:
++  p95_ms: 120.0
++  p99_ms: 160.0
++  source: "Initial local best on Null providers"
++  timestamp: "2025-09-14T00:00:00Z"
++
+diff --git a/ZEN/PERF/PerfRunner/SmartPay.PerfRunner.csproj b/ZEN/PERF/PerfRunner/SmartPay.PerfRunner.csproj
+index 4444444..5555555 100644
+--- a/ZEN/PERF/PerfRunner/SmartPay.PerfRunner.csproj
++++ b/ZEN/PERF/PerfRunner/SmartPay.PerfRunner.csproj
+@@ -1,12 +1,16 @@
+ <Project Sdk="Microsoft.NET.Sdk">
+   <PropertyGroup>
+     <OutputType>Exe</OutputType>
+     <TargetFramework>net8.0</TargetFramework>
+     <ImplicitUsings>enable</ImplicitUsings>
+     <Nullable>enable</Nullable>
+   </PropertyGroup>
+   <ItemGroup>
+     <None Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+   </ItemGroup>
++  <ItemGroup>
++    <PackageReference Include="YamlDotNet" Version="13.7.1" />
++  </ItemGroup>
+ </Project>
+ 
+diff --git a/ZEN/PERF/PerfRunner/Program.cs b/ZEN/PERF/PerfRunner/Program.cs
+index 5555555..6666666 100644
+--- a/ZEN/PERF/PerfRunner/Program.cs
++++ b/ZEN/PERF/PerfRunner/Program.cs
+@@ -1,20 +1,25 @@
+ using System.Buffers;
+ using System.Diagnostics;
+ using System.Net.Http.Headers;
+ using System.Text;
+ using System.Text.Json;
+ using System.Text.Json.Serialization;
++using YamlDotNet.Serialization;
++using YamlDotNet.Serialization.NamingConventions;
+ 
+ // Simple self-contained perf runner for SmartPay API.
+ // Drives a fixed RPS over a duration and computes latency distribution.
+ 
+ public static class Program
+ {
+     public static async Task<int> Main(string[] args)
+     {
+         var cfg = PerfConfig.FromEnv();
+         Console.WriteLine($"[PerfRunner] BaseUrl={cfg.BaseUrl}, RPS={cfg.Rps}, Duration={cfg.DurationSeconds}s, Warmup={cfg.WarmupSeconds}s");
+ 
++        Console.WriteLine("[PerfRunner] Build mode expectation: Release");
++
+         using var http = new HttpClient
+         {
+             BaseAddress = new Uri(cfg.BaseUrl),
+             Timeout = TimeSpan.FromSeconds(10)
+         };
+@@ -49,8 +54,8 @@ public static class Program
+         Console.WriteLine("[PerfRunner] Phase complete.");
+ 
+         // Gate evaluation
+-        var gate = PerfGate.Load();
+-        var best = BestKnown.Load();
++        var gate = PerfGate.LoadYaml();
++        var best = BestKnown.LoadYaml();
+         var gateResult = GateEvaluator.Evaluate(gate, best, metrics);
+ 
+         // Persist results
+@@ -212,20 +217,22 @@ file sealed class Metrics
+     public double DurationSeconds { get; set; }
+ }
+ 
+ file sealed class PerfGate
+ {
+     public Dictionary<string, EndpointGate> Targets { get; set; } = new();
+ 
+-    public static PerfGate Load()
++    public static PerfGate LoadYaml()
+     {
+-        var path = FindRepoFile(Path.Combine("DOCS", "PERF", "PerfGate.json"));
+-        var json = File.ReadAllText(path);
+-        return JsonSerializer.Deserialize<PerfGate>(json, JsonOpts.Options)!;
++        var path = FindRepoFile(Path.Combine("ANALYSIS", "PERF", "PerfGate.yaml"));
++        var yaml = File.ReadAllText(path);
++        var deserializer = new DeserializerBuilder()
++            .WithNamingConvention(UnderscoredNamingConvention.Instance)
++            .Build();
++        return deserializer.Deserialize<PerfGate>(yaml)!;
+     }
+ 
+     public static string FindRepoFile(string relativePath)
+     {
+         var dir = new DirectoryInfo(AppContext.BaseDirectory);
+         while (dir != null && !File.Exists(Path.Combine(dir.FullName, relativePath)))
+             dir = dir.Parent;
+@@ -257,24 +264,27 @@ file sealed class RegressionBudget
+     public double P99 { get; set; }
+ }
+ 
+ file sealed class BestKnown
+ {
+-    public Dictionary<string, BestEndpoint> Endpoints { get; set; } = new();
++    // YAML layout is a flat map of endpoint -> values
++    public Dictionary<string, BestEndpoint> Endpoints { get; set; } = new();
+ 
+-    public static BestKnown? TryLoad()
++    public static BestKnown? TryLoadYaml()
+     {
+         try
+         {
+-            var path = PerfGate.FindRepoFile(Path.Combine("DOCS", "PERF", "Baselines", "BestKnown.json"));
+-            var json = File.ReadAllText(path);
+-            return JsonSerializer.Deserialize<BestKnown>(json, JsonOpts.Options);
++            var path = PerfGate.FindRepoFile(Path.Combine("ANALYSIS", "PERF", "Baselines", "BestKnown.yaml"));
++            var yaml = File.ReadAllText(path);
++            var deserializer = new DeserializerBuilder()
++                .WithNamingConvention(UnderscoredNamingConvention.Instance)
++                .Build();
++            var map = deserializer.Deserialize<Dictionary<string, BestEndpoint>>(yaml) ?? new();
++            return new BestKnown { Endpoints = map };
+         }
+         catch { return null; }
+     }
+ 
+-    public static BestKnown Load() => TryLoad() ?? new BestKnown();
++    public static BestKnown LoadYaml() => TryLoadYaml() ?? new BestKnown();
+ 
+     public BestEndpoint? Get(string endpoint) => Endpoints.TryGetValue(endpoint, out var v) ? v : null;
+ }
+ 
+ file sealed class BestEndpoint
+@@ -333,7 +343,7 @@ file static class GateEvaluator
+         }
+ 
+         // Regression (if baseline exists)
+-        var best = BestKnown.TryLoad()?.Get(m.Endpoint);
++        var best = BestKnown.TryLoadYaml()?.Get(m.Endpoint);
+         if (best is not null)
+         {
+             var p95Delta = PercentIncrease(best.P95_ms, m.P95_ms);
+             var p99Delta = PercentIncrease(best.P99_ms, m.P99_ms);
+             if (p95Delta > ep.RegressionBudget.P95 || p99Delta > ep.RegressionBudget.P99)
+diff --git a/.github/workflows/perf.yml b/.github/workflows/perf.yml
+index 6666666..7777777 100644
+--- a/.github/workflows/perf.yml
++++ b/.github/workflows/perf.yml
+@@ -1,9 +1,10 @@
+ name: perf
+ on:
+   pull_request:
+     branches: [ "main", "master" ]
+ 
+ jobs:
+   run-perf:
+     runs-on: ubuntu-latest
+     timeout-minutes: 15
++    env:
++      DOTNET_CONFIGURATION: Release
+     steps:
+       - uses: actions/checkout@v4
+ 
+@@ -14,7 +15,7 @@ jobs:
+           dotnet-version: '8.0.x'
+ 
+       - name: Restore & Build
+         run: |
+-          dotnet build -c Release
++          dotnet build -c Release
+ 
+       - name: Launch API (background)
+         run: |
+@@ -48,7 +49,7 @@ jobs:
+           SMARTPAY_AMOUNT: "2500"
+         run: |
+           dotnet run -c Release --project ZEN/PERF/PerfRunner || (echo "Perf gate failed." && false)
+ 
+       - name: Upload perf artifacts
+         uses: actions/upload-artifact@v4
+         with:
+           name: perf-results
+-          path: ZEN/PERF/PerfRunner/bin/Release/net8.0/perf-results/*
++          path: ZEN/PERF/PerfRunner/bin/Release/net8.0/perf-results/*
+ 
+diff --git a/REVIEW/CodeReview/ChatGPT/PatchOn/20250914/0037_CoreAPI_PerfSuite_YAML_Analysis.NOTES.md b/REVIEW/CodeReview/ChatGPT/PatchOn/20250914/0037_CoreAPI_PerfSuite_YAML_Analysis.NOTES.md
+new file mode 100644
+index 0000000..8888888
+--- /dev/null
++++ b/REVIEW/CodeReview/ChatGPT/PatchOn/20250914/0037_CoreAPI_PerfSuite_YAML_Analysis.NOTES.md
+@@ -0,0 +1,53 @@
++# Patch Notes — 0037 Core API Perf Suite (Release + ANALYSIS + YAML)
++
++**What changed vs. 0033:**
++1. **Release mode** reinforced in docs and CI (already used; now documented explicitly).
++2. **Folder move**: perf artifacts live under **`ANALYSIS/PERF`** (not `DOCS/PERF`).
++3. **YAML-based tuning**: gates and baselines are now configured via **YAML** (`PerfGate.yaml`, `BestKnown.yaml`). The perf runner reads YAML using **YamlDotNet**.
++
++**Updated files:**
++- `ANALYSIS/PERF/ServiceGuarantees.md` (SLOs, gates, workflow).
++- `ANALYSIS/PERF/PerfGate.yaml` (absolute + regression budgets).
++- `ANALYSIS/PERF/Baselines/BestKnown.sample.yaml` (template baseline).
++- `ZEN/PERF/PerfRunner/SmartPay.PerfRunner.csproj` (+YamlDotNet).
++- `ZEN/PERF/PerfRunner/Program.cs` (YAML loader + new paths).
++- `.github/workflows/perf.yml` (kept **Release** build/run).
++
++**Migration (if you applied 0033)**
++- You can delete `DOCS/PERF/*` after adopting this patch. The runner now reads only `ANALYSIS/PERF/*`.
++
++**Usage**
++```bash
++ASPNETCORE_URLS=http://localhost:5000 dotnet run -c Release --project ZEN/SOURCE/Api &
++SMARTPAY_BASE_URL=http://localhost:5000 \
++SMARTPAY_RPS=75 SMARTPAY_DURATION_SECONDS=30 SMARTPAY_WARMUP_SECONDS=3 \
++dotnet run -c Release --project ZEN/PERF/PerfRunner
++```
++
++**Start regression tracking**
++- Copy `ANALYSIS/PERF/Baselines/BestKnown.sample.yaml` → `BestKnown.yaml` with your best p95/p99 values.
++
++— ChatGPT
++

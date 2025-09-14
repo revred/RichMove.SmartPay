@@ -1,0 +1,9 @@
+targets:
+  fx_quote:
+    absolute:
+      p95_ms: 150
+      p99_ms: 200
+      error_rate_pct: 0.1
+    regression_budget_pct:
+      p95: 15
+      p99: 15
