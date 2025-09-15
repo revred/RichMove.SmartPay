@@ -7,7 +7,7 @@ namespace SmartPay.Api.Hosted;
 
 public sealed class WebhookOptions
 {
-    public bool Enabled { get; init; } = false;
+    public bool Enabled { get; init; }
     public string Secret { get; init; } = "replace-me";
     public int MaxAttempts { get; init; } = 6;
 }

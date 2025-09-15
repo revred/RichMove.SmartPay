@@ -27,6 +27,9 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         IOptions<ApiSecurityHardeningOptions> options,
         IMeterFactory meterFactory)
     {
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(meterFactory);
         _logger = logger;
         _options = options.Value;
         _rateLimitCache = new ConcurrentDictionary<string, RateLimitState>();
@@ -46,6 +49,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
 
     public async Task<SecurityCheckResult> ValidateRequestAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
         using var activity = SmartPayTracing.Source.StartActivity("ApiSecurityValidation");
         var stopwatch = Stopwatch.StartNew();
 
@@ -173,7 +177,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         }
 
         // Check against whitelist (if configured)
-        if (_options.IpWhitelist.Any() && !_options.IpWhitelist.Contains(clientIp))
+        if (_options.IpWhitelist.Count > 0 && !_options.IpWhitelist.Contains(clientIp))
         {
             result.IsAllowed = false;
             result.Reasons.Add($"IP address {clientIp} is not whitelisted");
@@ -262,7 +266,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
 
         // Check endpoint permissions
         var endpoint = context.Request.Path.ToString();
-        if (apiKeyInfo.AllowedEndpoints.Any() &&
+        if (apiKeyInfo.AllowedEndpoints.Count > 0 &&
             !apiKeyInfo.AllowedEndpoints.Any(e => endpoint.StartsWith(e, StringComparison.OrdinalIgnoreCase)))
         {
             result.IsAllowed = false;
@@ -272,7 +276,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
 
         // Check method permissions
         var method = context.Request.Method;
-        if (apiKeyInfo.AllowedMethods.Any() && !apiKeyInfo.AllowedMethods.Contains(method))
+        if (apiKeyInfo.AllowedMethods.Count > 0 && !apiKeyInfo.AllowedMethods.Contains(method))
         {
             result.IsAllowed = false;
             result.Reasons.Add("API key does not have permission for this HTTP method");
@@ -334,7 +338,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
         // Content-Type validation
         var contentType = context.Request.ContentType;
         if (!string.IsNullOrEmpty(contentType) &&
-            _options.AllowedContentTypes.Any() &&
+            _options.AllowedContentTypes.Count > 0 &&
             !_options.AllowedContentTypes.Any(ct => contentType.StartsWith(ct, StringComparison.OrdinalIgnoreCase)))
         {
             result.IsAllowed = false;
@@ -436,10 +440,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
     {
         if (string.IsNullOrEmpty(userAgent)) return true;
 
-        var suspiciousPatterns = new[]
-        {
-            "bot", "crawler", "spider", "scraper", "python", "curl", "wget", "scanner"
-        };
+        string[] suspiciousPatterns = ["bot", "crawler", "spider", "scraper", "python", "curl", "wget", "scanner"];
 
         return suspiciousPatterns.Any(pattern =>
             userAgent.Contains(pattern, StringComparison.OrdinalIgnoreCase));
@@ -448,7 +449,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
     private double AnalyzeRequestSize(string endpoint, long contentLength)
     {
         // Simple heuristic: flag unusually large payloads for specific endpoints
-        var typicalSizes = new Dictionary<string, long>
+        Dictionary<string, long> typicalSizes = new()
         {
             ["/api/auth"] = 1024,
             ["/api/payments"] = 4096,
@@ -474,7 +475,7 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
     {
         var result = new SecurityCheckResult { IsAllowed = true };
 
-        if (_options.BlockedCountries.Any() || _options.AllowedCountries.Any())
+        if (_options.BlockedCountries.Count > 0 || _options.AllowedCountries.Count > 0)
         {
             // In a real implementation, you would use a GeoIP service here
             // For now, we'll just return allowed
@@ -571,8 +572,8 @@ public sealed class ApiSecurityHardeningService : IHostedService, IDisposable
             Key = apiKey,
             IsActive = true,
             ExpiresAt = DateTime.UtcNow.AddYears(1),
-            AllowedEndpoints = new List<string>(),
-            AllowedMethods = new List<string> { "GET", "POST", "PUT", "DELETE" }
+            AllowedEndpoints = [],
+            AllowedMethods = ["GET", "POST", "PUT", "DELETE"]
         };
 
         _apiKeyCache[apiKey] = apiKeyInfo;
@@ -682,21 +683,21 @@ public class ApiSecurityHardeningOptions
     public int MaxRequestsPerWindow { get; set; } = 100;
     public TimeSpan RateLimitWindow { get; set; } = TimeSpan.FromMinutes(1);
 
-    public bool RequireApiKey { get; set; } = false;
-    public bool RequireRequestSignature { get; set; } = false;
-    public string SignatureSecret { get; set; } = "";
+    public bool RequireApiKey { get; set; }
+    public bool RequireRequestSignature { get; set; }
+    public string SignatureSecret { get; set; } = string.Empty;
     public TimeSpan MaxRequestAge { get; set; } = TimeSpan.FromMinutes(5);
 
     public bool EnableContentValidation { get; set; } = true;
-    public List<string> AllowedContentTypes { get; set; } = new();
+    public List<string> AllowedContentTypes { get; init; } = [];
     public long MaxContentLength { get; set; } = 1024 * 1024; // 1MB
 
-    public List<string> IpWhitelist { get; set; } = new();
-    public List<string> IpBlacklist { get; set; } = new();
+    public List<string> IpWhitelist { get; init; } = [];
+    public List<string> IpBlacklist { get; init; } = [];
 
-    public bool EnableGeographicRestrictions { get; set; } = false;
-    public List<string> AllowedCountries { get; set; } = new();
-    public List<string> BlockedCountries { get; set; } = new();
+    public bool EnableGeographicRestrictions { get; set; }
+    public List<string> AllowedCountries { get; init; } = [];
+    public List<string> BlockedCountries { get; init; } = [];
 
     public bool EnableAnomalyDetection { get; set; } = true;
     public double AnomalyThreshold { get; set; } = 0.7;
@@ -706,30 +707,30 @@ public class ApiSecurityHardeningOptions
 public class SecurityCheckResult
 {
     public bool IsAllowed { get; set; } = true;
-    public List<string> Reasons { get; set; } = new();
+    public List<string> Reasons { get; init; } = [];
     public SecurityLevel SecurityLevel { get; set; } = SecurityLevel.Normal;
-    public double AnomalyScore { get; set; } = 0.0;
+    public double AnomalyScore { get; set; }
     public ApiKeyInfo? ApiKeyInfo { get; set; }
 }
 
 public class ApiKeyInfo
 {
-    public string Key { get; set; } = "";
+    public string Key { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public DateTime ExpiresAt { get; set; }
-    public List<string> AllowedEndpoints { get; set; } = new();
-    public List<string> AllowedMethods { get; set; } = new();
+    public List<string> AllowedEndpoints { get; init; } = [];
+    public List<string> AllowedMethods { get; init; } = [];
 }
 
 public class ApiSecurityEvent
 {
     public DateTime Timestamp { get; set; }
-    public string ClientIp { get; set; } = "";
-    public string UserAgent { get; set; } = "";
-    public string Endpoint { get; set; } = "";
-    public string Method { get; set; } = "";
+    public string ClientIp { get; set; } = string.Empty;
+    public string UserAgent { get; set; } = string.Empty;
+    public string Endpoint { get; set; } = string.Empty;
+    public string Method { get; set; } = string.Empty;
     public SecurityLevel SecurityLevel { get; set; }
-    public List<string> Reasons { get; set; } = new();
+    public List<string> Reasons { get; init; } = [];
     public double AnomalyScore { get; set; }
 }
 
@@ -737,14 +738,14 @@ public record RateLimitState(int RequestCount, DateTime WindowStart);
 
 public class AnomalyDetectionResult
 {
-    public double AnomalyScore { get; set; } = 0.0;
-    public List<string> Anomalies { get; set; } = new();
+    public double AnomalyScore { get; set; }
+    public List<string> Anomalies { get; init; } = [];
 }
 
 public class RequestPatternAnalysis
 {
-    public double AnomalyScore { get; set; } = 0.0;
-    public string Pattern { get; set; } = "";
+    public double AnomalyScore { get; set; }
+    public string Pattern { get; set; } = string.Empty;
 }
 
 public enum SecurityLevel

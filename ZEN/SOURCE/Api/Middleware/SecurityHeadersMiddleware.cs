@@ -14,6 +14,9 @@ public class SecurityHeadersMiddleware
         ILogger<SecurityHeadersMiddleware> logger,
         IOptions<SecurityHeadersOptions> options)
     {
+        ArgumentNullException.ThrowIfNull(next);
+        ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(options);
         _next = next;
         _logger = logger;
         _options = options.Value;
@@ -21,6 +24,7 @@ public class SecurityHeadersMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
         ApplySecurityHeaders(context);
 
         if (IsPreflightRequest(context))
@@ -88,7 +92,7 @@ public class SecurityHeadersMiddleware
             if (_options.MustRevalidate) cacheDirectives.Add("must-revalidate");
             if (_options.MaxAge > 0) cacheDirectives.Add($"max-age={_options.MaxAge}");
 
-            if (cacheDirectives.Any())
+            if (cacheDirectives.Count > 0)
             {
                 headers.Append("Cache-Control", string.Join(", ", cacheDirectives));
             }
@@ -128,17 +132,17 @@ public class SecurityHeadersMiddleware
             headers.Append("Access-Control-Allow-Credentials", "true");
         }
 
-        if (_options.CorsAllowedMethods.Any())
+        if (_options.CorsAllowedMethods.Count > 0)
         {
             headers.Append("Access-Control-Allow-Methods", string.Join(", ", _options.CorsAllowedMethods));
         }
 
-        if (_options.CorsAllowedHeaders.Any())
+        if (_options.CorsAllowedHeaders.Count > 0)
         {
             headers.Append("Access-Control-Allow-Headers", string.Join(", ", _options.CorsAllowedHeaders));
         }
 
-        if (_options.CorsExposedHeaders.Any())
+        if (_options.CorsExposedHeaders.Count > 0)
         {
             headers.Append("Access-Control-Expose-Headers", string.Join(", ", _options.CorsExposedHeaders));
         }
@@ -163,7 +167,7 @@ public class SecurityHeadersMiddleware
                 .Select(h => $"{h.Key}: {h.Value}")
                 .ToList();
 
-            if (appliedHeaders.Any())
+            if (appliedHeaders.Count > 0)
             {
                 _logger.LogDebug("Applied security headers for {Path}: {Headers}",
                     context.Request.Path, string.Join(", ", appliedHeaders));
@@ -228,7 +232,7 @@ public class SecurityHeadersOptions
     public bool EnableHsts { get; set; } = true;
     public int HstsMaxAge { get; set; } = 31536000; // 1 year
     public bool HstsIncludeSubDomains { get; set; } = true;
-    public bool HstsPreload { get; set; } = false;
+    public bool HstsPreload { get; set; }
 
     public bool EnableXFrameOptions { get; set; } = true;
     public string XFrameOptionsValue { get; set; } = "DENY";
@@ -249,45 +253,45 @@ public class SecurityHeadersOptions
     public int ExpectCtMaxAge { get; set; } = 86400; // 24 hours
 
     public bool EnableCacheControl { get; set; } = true;
-    public bool NoCache { get; set; } = false;
-    public bool NoStore { get; set; } = false;
+    public bool NoCache { get; set; }
+    public bool NoStore { get; set; }
     public bool MustRevalidate { get; set; } = true;
-    public int MaxAge { get; set; } = 0;
+    public int MaxAge { get; set; }
 
-    public bool EnableServerHeader { get; set; } = false;
+    public bool EnableServerHeader { get; set; }
     public string ServerHeaderValue { get; set; } = "";
     public bool RemoveServerHeaderOnError { get; set; } = true;
 
-    public bool EnableSecurityHeadersLogging { get; set; } = false;
+    public bool EnableSecurityHeadersLogging { get; set; }
 
     // CORS Configuration
     public bool EnableCors { get; set; } = true;
-    public bool CorsAllowAnyOrigin { get; set; } = false;
-    public bool CorsAllowCredentials { get; set; } = false;
-    public List<string> CorsAllowedOrigins { get; set; } = new();
-    public List<string> CorsAllowedOriginPatterns { get; set; } = new();
-    public List<string> CorsAllowedMethods { get; set; } = new() { "GET", "POST", "PUT", "DELETE", "OPTIONS" };
-    public List<string> CorsAllowedHeaders { get; set; } = new() { "Content-Type", "Authorization", "Accept", "X-Requested-With" };
-    public List<string> CorsExposedHeaders { get; set; } = new();
+    public bool CorsAllowAnyOrigin { get; set; }
+    public bool CorsAllowCredentials { get; set; }
+    public List<string> CorsAllowedOrigins { get; init; } = [];
+    public List<string> CorsAllowedOriginPatterns { get; init; } = [];
+    public List<string> CorsAllowedMethods { get; init; } = ["GET", "POST", "PUT", "DELETE", "OPTIONS"];
+    public List<string> CorsAllowedHeaders { get; init; } = ["Content-Type", "Authorization", "Accept", "X-Requested-With"];
+    public List<string> CorsExposedHeaders { get; init; } = [];
     public int CorsMaxAge { get; set; } = 86400; // 24 hours
 
     // Content Security Policy
     public bool EnableContentSecurityPolicy { get; set; } = true;
     public string ContentSecurityPolicyValue { get; set; } = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'";
-    public bool ContentSecurityPolicyReportOnly { get; set; } = false;
+    public bool ContentSecurityPolicyReportOnly { get; set; }
     public string? ContentSecurityPolicyReportUri { get; set; }
 
     // Feature Policy / Permissions Policy
-    public Dictionary<string, List<string>> FeaturePolicyDirectives { get; set; } = new()
+    public Dictionary<string, List<string>> FeaturePolicyDirectives { get; init; } = new()
     {
-        ["accelerometer"] = new() { "'none'" },
-        ["camera"] = new() { "'none'" },
-        ["geolocation"] = new() { "'none'" },
-        ["gyroscope"] = new() { "'none'" },
-        ["magnetometer"] = new() { "'none'" },
-        ["microphone"] = new() { "'none'" },
-        ["payment"] = new() { "'none'" },
-        ["usb"] = new() { "'none'" }
+        ["accelerometer"] = ["'none'"],
+        ["camera"] = ["'none'"],
+        ["geolocation"] = ["'none'"],
+        ["gyroscope"] = ["'none'"],
+        ["magnetometer"] = ["'none'"],
+        ["microphone"] = ["'none'"],
+        ["payment"] = ["'none'"],
+        ["usb"] = ["'none'"]
     };
 
     public Dictionary<string, string> CustomHeaders { get; set; } = new();

@@ -27,8 +27,7 @@ public sealed class CreateIntentEndpoint(
     IProviderRouter router,
     IIdempotencyStore idem,
     INotificationService notifier,
-    IClock clock,
-    ILogger<CreateIntentEndpoint> log) : Endpoint<CreateIntentRequest, CreateIntentResponse>
+    IClock clock) : Endpoint<CreateIntentRequest, CreateIntentResponse>
 {
     public override void Configure()
     {
@@ -43,6 +42,7 @@ public sealed class CreateIntentEndpoint(
 
     public override async Task HandleAsync(CreateIntentRequest req, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(req);
         if (req.Amount <= 0 || string.IsNullOrWhiteSpace(req.Currency))
         {
             await SendErrorsAsync(400, ct);

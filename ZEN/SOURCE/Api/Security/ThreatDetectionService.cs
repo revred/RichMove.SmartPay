@@ -28,6 +28,7 @@ public sealed partial class ThreatDetectionService : IHostedService, IDisposable
         ILogger<ThreatDetectionService> logger,
         IOptions<ThreatDetectionOptions> options)
     {
+        ArgumentNullException.ThrowIfNull(logger);
         ArgumentNullException.ThrowIfNull(options);
         _logger = logger;
         _options = options.Value;
@@ -738,7 +739,7 @@ public sealed class ThreatPattern
     public string Id { get; set; } = string.Empty;
     public ThreatType Type { get; set; }
     public ThreatSeverity Severity { get; set; }
-    public List<string> Patterns { get; set; } = [];
+    public List<string> Patterns { get; init; } = [];
     public string Description { get; set; } = string.Empty;
 }
 

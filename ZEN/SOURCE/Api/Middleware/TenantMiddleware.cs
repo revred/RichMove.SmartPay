@@ -2,7 +2,7 @@ using SmartPay.Core.MultiTenancy;
 
 namespace SmartPay.Api.Middleware;
 
-public sealed class TenantMiddleware(RequestDelegate next, IConfiguration cfg, ITenantResolver resolver)
+public sealed class TenantMiddleware(RequestDelegate next, ITenantResolver resolver)
 {
     public async Task Invoke(HttpContext context)
     {

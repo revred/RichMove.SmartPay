@@ -25,6 +25,7 @@ public sealed class MockWebhookEndpoint(MockPayProvider mock, INotificationServi
 
     public override async Task HandleAsync(MockWebhookRequest req, CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(req);
         var signature = HttpContext.Request.Headers["MockPay-Signature"].FirstOrDefault();
         string payload;
         HttpContext.Request.EnableBuffering();

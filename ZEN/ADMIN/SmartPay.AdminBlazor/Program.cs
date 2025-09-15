@@ -13,4 +13,4 @@ builder.Services.AddScoped(sp => new HttpClient
     BaseAddress = new Uri(apiBaseUrl)
 });
 
-await builder.Build().RunAsync();
+await builder.Build().RunAsync().ConfigureAwait(false);

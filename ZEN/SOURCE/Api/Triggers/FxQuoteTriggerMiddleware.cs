@@ -10,6 +10,7 @@ public sealed class FxQuoteTriggerMiddleware(RequestDelegate next, INotification
 
     public async Task Invoke(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
         var isFxQuotePost =
             HttpMethods.IsPost(context.Request.Method) &&
             context.Request.Path.Equals(TargetPath, StringComparison.OrdinalIgnoreCase);

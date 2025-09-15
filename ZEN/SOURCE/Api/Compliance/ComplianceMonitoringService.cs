@@ -421,6 +421,7 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
 
     private void LogComplianceViolations(ComplianceFramework framework, List<ComplianceViolation> violations)
     {
+        ArgumentNullException.ThrowIfNull(violations);
         foreach (var violation in violations)
         {
             var auditEvent = new ComplianceEvent
@@ -480,6 +481,10 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
     public void RecordComplianceEvent(string eventType, string framework, string severity,
         string details, string? userId = null)
     {
+        ArgumentNullException.ThrowIfNull(eventType);
+        ArgumentNullException.ThrowIfNull(framework);
+        ArgumentNullException.ThrowIfNull(severity);
+        ArgumentNullException.ThrowIfNull(details);
         var auditEvent = new ComplianceEvent
         {
             Id = Guid.NewGuid().ToString(),
@@ -518,7 +523,7 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
 
     private double CalculateComplianceScore()
     {
-        if (!_frameworkStatus.Any())
+        if (_frameworkStatus.Count == 0)
             return 100.0;
 
         var totalFrameworks = _frameworkStatus.Count;
@@ -585,7 +590,7 @@ public sealed class ComplianceOptions
     public TimeSpan CheckInterval { get; set; } = TimeSpan.FromHours(1);
     // Keep default frameworks but ensure uniqueness via Normalize().
     public List<ComplianceFramework> EnabledFrameworks { get; } =
-        new() { ComplianceFramework.PCIDSS, ComplianceFramework.GDPR };
+        [ComplianceFramework.PCIDSS, ComplianceFramework.GDPR];
     public bool EnableAuditLogging { get; set; } = true;
     public bool EnableRealTimeMonitoring { get; set; } = true;
 
@@ -641,7 +646,7 @@ public sealed class ComplianceEvent
 public sealed class ComplianceReport
 {
     public DateTime GeneratedAt { get; set; }
-    public List<ComplianceStatus> FrameworkStatus { get; set; } = [];
+    public List<ComplianceStatus> FrameworkStatus { get; init; } = [];
     public int TotalViolations { get; set; }
     public int CriticalViolations { get; set; }
     public double ComplianceScore { get; set; }

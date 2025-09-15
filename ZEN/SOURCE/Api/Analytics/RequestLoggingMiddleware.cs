@@ -6,6 +6,7 @@ public sealed class RequestLoggingMiddleware(RequestDelegate next, ILogger<Reque
 {
     public async Task Invoke(HttpContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
         var sw = Stopwatch.StartNew();
         try
         {
