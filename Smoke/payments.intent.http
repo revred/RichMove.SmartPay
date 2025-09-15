@@ -1,0 +1,13 @@
+# Create & Replay
+POST http://localhost:5001/api/payments/intent
+Content-Type: application/json
+Idempotency-Key: idem-001
+
+{ "currency":"GBP","amount":100.00,"reference":"ORDER-001" }
+
+###
+POST http://localhost:5001/api/payments/intent
+Content-Type: application/json
+Idempotency-Key: idem-001
+
+{ "currency":"GBP","amount":100.00,"reference":"ORDER-001" }

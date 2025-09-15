@@ -1,0 +1,5 @@
+POST http://localhost:5055/merchant/webhooks/smartpay
+Content-Type: application/json
+X-SmartPay-Signature: <signature>
+
+{ "type":"payment.intent.succeeded", "intentId":"mpi_123" }

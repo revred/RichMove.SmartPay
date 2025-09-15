@@ -1,8 +1,19 @@
-# Blazor SSR — Speed Cookbook (Plan)
+# Blazor Server — Lightning Fast (WP6.2)
 
-**Goal:** Deliver sub‑second perceived performance with tiny payloads and minimal server load.
+- Use `ServerPrerendered`; keep component state tiny.
+- Reuse `HttpClient` via `IHttpClientFactory`.
+- Prefer plain forms & tables; no heavy UI libs.
+- Turn off tracing/metrics in RED; enable sampling only in GREEN.
 
-## Checklists
+## Perf budget
+- TTFB < 300ms local, < 600ms min-tier GREEN.
+- FCP < 1.2s on low-end devices.
+
+## Circuit tips
+- Avoid large graphs in `@code` state.
+- Stream results if payloads are large (rare in admin).
+
+## Previous guidance (keep for reference)
 
 ### Rendering
 - Prefer **SSR**; only hydrate small components (`InteractiveOnDemand`).

@@ -1,0 +1,5 @@
+POST http://localhost:5001/api/payments/webhook/mock
+Content-Type: application/json
+MockPay-Signature: <hex hmac of body>
+
+{ "type":"payment_intent.succeeded","intentId":"mpi_123","tenantId":"default" }
