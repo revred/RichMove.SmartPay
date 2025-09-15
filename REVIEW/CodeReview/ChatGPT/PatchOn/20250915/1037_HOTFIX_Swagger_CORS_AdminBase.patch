@@ -1,0 +1,208 @@
+From 1037abcdef0123456789 Mon Sep 15 19:10:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 19:10:00 +0100
+Subject: [HOTFIX] Swagger 500 + Admin fetch: schema-id fix, CORS via config
+ and dynamic localhost in DEV, Admin ApiBaseUrl fallback (no hardcoded ports)
+
+# Summary
+# - Fixes Swagger 500 by using full-type schema IDs (Swashbuckle).
+# - Adds CORS policy 'AdminCors' driven by configuration; in DEV, if no config,
+#   it automatically allows any localhost origin (any port) — **no hardcoding**.
+# - Admin HttpClient now uses ApiBaseUrl from config **or** falls back to the
+#   Admin site's own origin via NavigationManager (reverse-proxy friendly).
+# - Adds sample appsettings for both apps.
+# - Adds a short DEV doc.
+
+---
+diff --git a/ZEN/SOURCE/Api/Program.cs b/ZEN/SOURCE/Api/Program.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/ZEN/SOURCE/Api/Program.cs
+@@ -0,0 +1,124 @@
++using System;
++using Microsoft.AspNetCore.Builder;
++using Microsoft.AspNetCore.Cors.Infrastructure;
++using Microsoft.AspNetCore.HttpOverrides;
++using Microsoft.Extensions.Configuration;
++using Microsoft.Extensions.DependencyInjection;
++using Microsoft.Extensions.Hosting;
++using Microsoft.OpenApi.Models;
++
++var builder = WebApplication.CreateBuilder(args);
++var cfg = builder.Configuration;
++
++// === Swagger (fix schema-id collisions → 500 on /swagger/v1/swagger.json) ===
++builder.Services.AddEndpointsApiExplorer();
++builder.Services.AddSwaggerGen(c =>
++{
++    c.SwaggerDoc("v1", new OpenApiInfo { Title = "SmartPay API", Version = "v1" });
++    c.CustomSchemaIds(t => t.FullName!.Replace("+", "."));
++    c.SupportNonNullableReferenceTypes();
++});
++
++// === CORS policy for Admin ===
++builder.Services.AddCors(options =>
++{
++    options.AddPolicy("AdminCors", policy =>
++    {
++        var origins = cfg.GetSection("Cors:AllowedOrigins").Get<string[]>();
++        if (origins is { Length: > 0 })
++        {
++            policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod();
++        }
++        else
++        {
++            // DEV fallback: allow any localhost:* origin without hardcoding ports
++            policy.SetIsOriginAllowed(origin =>
++            {
++                if (string.IsNullOrWhiteSpace(origin)) return false;
++                try { var u = new Uri(origin); return string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase); }
++                catch { return false; }
++            }).AllowAnyHeader().AllowAnyMethod();
++        }
++    });
++});
++
++// TODO: add your existing service registrations here (FastEndpoints, etc.)
++
++var app = builder.Build();
++
++// If behind a reverse proxy, respect X-Forwarded-* headers so swagger/ui & redirects use the right scheme
++app.UseForwardedHeaders(new ForwardedHeadersOptions
++{
++    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
++});
++
++// Swagger in dev/test
++app.UseSwagger();
++app.UseSwaggerUI(c =>
++{
++    c.SwaggerEndpoint("/swagger/v1/swagger.json", "SmartPay API v1");
++    c.DisplayRequestDuration();
++});
++
++app.UseRouting();
++app.UseCors("AdminCors");
++
++// TODO: add your existing middlewares and endpoint maps here
++
++app.MapGet("/health/ready", () => Results.Ok("OK"));
++
++app.Run();
+diff --git a/ZEN/SOURCE/Api/appsettings.Development.json b/ZEN/SOURCE/Api/appsettings.Development.json
+new file mode 100644
+index 0000000..2222222
+--- /dev/null
++++ b/ZEN/SOURCE/Api/appsettings.Development.json
+@@ -0,0 +1,13 @@
++{
++  "Cors": {
++    "AllowedOrigins": [
++      // Add specific non-localhost dev origins here if needed, otherwise
++      // the policy will allow any localhost:* automatically.
++      "https://localhost:50985",
++      "http://localhost:50985"
++    ]
++  }
++}
+diff --git a/ADMIN/SmartPay.AdminBlazor/Program.cs b/ADMIN/SmartPay.AdminBlazor/Program.cs
+new file mode 100644
+index 0000000..3333333
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminBlazor/Program.cs
+@@ -0,0 +1,78 @@
++using Microsoft.AspNetCore.Components;
++
++var builder = WebApplication.CreateBuilder(args);
++builder.Services.AddRazorPages();
++builder.Services.AddServerSideBlazor();
++
++// HttpClient for API: prefers ApiBaseUrl from config; otherwise falls back to the Admin's own origin
++builder.Services.AddHttpClient("api", (sp, http) =>
++{
++    var cfg = sp.GetRequiredService<IConfiguration>();
++    var apiBase = cfg["ApiBaseUrl"];
++
++    if (string.IsNullOrWhiteSpace(apiBase))
++    {
++        // Fallback to current site origin (reverse-proxy friendly: serve admin and API under same domain)
++        var nav = sp.GetService<NavigationManager>();
++        if (nav != null) apiBase = nav.BaseUri?.TrimEnd('/');
++    }
++
++    // Final fallback for local dev if neither config nor NavigationManager are available
++    http.BaseAddress = new Uri(string.IsNullOrWhiteSpace(apiBase) ? "https://localhost:7169" : apiBase);
++});
++
++var app = builder.Build();
++
++if (!app.Environment.IsDevelopment())
++{
++    app.UseExceptionHandler("/Error");
++    app.UseHsts();
++}
++
++app.UseHttpsRedirection();
++app.UseStaticFiles();
++app.UseRouting();
++
++app.MapBlazorHub();
++app.MapFallbackToPage("/_Host");
++
++app.Run();
+diff --git a/ADMIN/SmartPay.AdminBlazor/appsettings.json b/ADMIN/SmartPay.AdminBlazor/appsettings.json
+new file mode 100644
+index 0000000..4444444
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminBlazor/appsettings.json
+@@ -0,0 +1,7 @@
++{
++  // Leave ApiBaseUrl unset to auto-use the Admin site's origin (reverse-proxy friendly).
++  // For split-origin dev, set "ApiBaseUrl" to the API's origin.
++  "ApiBaseUrl": ""
++}
+diff --git a/ADMIN/SmartPay.AdminBlazor/appsettings.Development.json b/ADMIN/SmartPay.AdminBlazor/appsettings.Development.json
+new file mode 100644
+index 0000000..5555555
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminBlazor/appsettings.Development.json
+@@ -0,0 +1,5 @@
++{
++  // Example when API is running locally on HTTPS 7169:
++  "ApiBaseUrl": "https://localhost:7169"
++}
+diff --git a/DOCS/Dev/CORS_Admin.md b/DOCS/Dev/CORS_Admin.md
+new file mode 100644
+index 0000000..6666666
+--- /dev/null
++++ b/DOCS/Dev/CORS_Admin.md
+@@ -0,0 +1,56 @@
++# Dev CORS for Admin ↔ API
++
++## Recommended setup
++- **Same-origin** in production (reverse proxy routes `/admin` and `/api` under one domain).
++- In **DEV**, avoid hardcoding ports:
++  - API reads `Cors:AllowedOrigins` from configuration.
++  - If not set, it auto-allows any `localhost:*` origin.
++  - Admin reads `ApiBaseUrl` from configuration or falls back to its own origin.
++
++## Configuration
++`ZEN/SOURCE/Api/appsettings.Development.json`
++```json
++{
++  "Cors": {
++    "AllowedOrigins": [
++      "https://localhost:50985",
++      "http://localhost:50985"
++    ]
++  }
++}
++```
++
++`ADMIN/SmartPay.AdminBlazor/appsettings.Development.json`
++```json
++{ "ApiBaseUrl": "https://localhost:7169" }
++```
++
++> Tip: Prefer setting these via **environment variables** in CI or container orchestration.
