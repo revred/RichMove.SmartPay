@@ -70,6 +70,9 @@ builder.Services.AddWp4Features(builder.Configuration);
 // WP5: Event Bridge & Tenant Isolation (webhooks, RLS)
 builder.Services.AddWp5Features(builder.Configuration);
 
+// WP3: Payment Provider (minimal mock implementation for E2E demos)
+builder.Services.AddWp3Provider(builder.Configuration);
+
 // WP7: Operational Guardrails (admin auth, feature flags, guarded endpoints)
 builder.Services.AddWp7Guardrails(builder.Configuration);
 

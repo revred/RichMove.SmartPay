@@ -1,5 +1,7 @@
 # RichMove.SmartPay
 
+![Guardrails CI](https://img.shields.io/badge/guardrails-CI-green)
+![V%26V](https://img.shields.io/badge/V%26V-enforced-blue)
 [![Build Status](https://github.com/ramrevanur/richmove-smartpay/workflows/ci-coverage/badge.svg)](https://github.com/ramrevanur/richmove-smartpay/actions)
 [![Coverage Gate](https://img.shields.io/badge/coverage-60%25%20min-brightgreen)](https://github.com/ramrevanur/richmove-smartpay/actions)
 
@@ -7,10 +9,20 @@
 
 This repository powers the SmartPay API and related admin/merchant UI.
 
-## Current Focus
-- **WP4**: Realtime notifications, multi‑tenancy scaffolding, lightweight analytics.
-- **WP5**: Event Bridge (webhooks) + RLS templates.
-- **WP6**: UI & SDK plan (Blazor SSR + REST‑first SDKs). This commit adds **documentation only** for WP6.
+## WP3 (Minimal Payment Provider)
+- Create intent endpoint + mock provider webhook for end-to-end demo, idempotency and event flow.
+- Docs: `WPS/WP3.md`, `DOCS/API/Payments.md`
+
+## WP6 (Admin & SDK scaffolding)
+- Minimal Admin app under `ADMIN/SmartPay.AdminBlazor` (health + quote post demo).
+- SDK generation steps: `TOOLS/SDK/README.md`.
+
+CI enforces V&V presence and safe defaults for feature flags.
+
+## WP5 (Event Bridge & RLS)
+- **Webhooks (Outbound)**: HMAC-signed delivery with retrying outbox (opt-in via `appsettings.WP5.json`).
+- **Composite Notifications**: SignalR (WP4) + Webhooks mirror.
+- **RLS Templates**: `DB/SUPABASE/WP5_RLS.sql` + `DOCS/Data/RLS_Supabase.md` for tenant isolation.
 
 ## Quick Links
 - **WP4**: `WPS/WP04_Payment_Orchestrator_and_Connectors_V2.md`

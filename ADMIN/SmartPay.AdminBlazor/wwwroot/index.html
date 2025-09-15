@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>SmartPay Admin</title>
+    <base href="/" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" />
+</head>
+<body>
+    <div id="app">
+        <div class="d-flex justify-content-center align-items-center" style="height: 100vh;">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-3">
+                    <h5>Loading SmartPay Admin...</h5>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui" style="display: none;">
+        <div class="alert alert-danger" role="alert">
+            An unhandled error has occurred.
+            <a href="" class="reload">Reload</a>
+            <a class="dismiss">🗙</a>
+        </div>
+    </div>
+
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <style>
+        #blazor-error-ui {
+            background: lightyellow;
+            bottom: 0;
+            box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+            display: none;
+            left: 0;
+            padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+            position: fixed;
+            width: 100%;
+            z-index: 1000;
+        }
+
+        #blazor-error-ui .dismiss {
+            cursor: pointer;
+            position: absolute;
+            right: 0.75rem;
+            top: 0.5rem;
+        }
+    </style>
+</body>
+</html>

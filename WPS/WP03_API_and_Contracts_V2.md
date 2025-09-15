@@ -158,16 +158,38 @@ paths:
 - **Upstream**: WP01 (Repository & Tooling), WP02 (Core Domain & Database)
 - **Downstream**: WP04 (Payment Orchestrator), WP06 (Checkout UI & SDKs)
 
+## Minimal Payment Provider Implementation (WP3)
+
+### Scope
+- Minimal single-provider path using `MockPayProvider` to unlock end-to-end demos.
+- Idempotency with `Idempotency-Key` header (24h TTL) via `IIdempotencyStore`.
+- Webhook receiver with HMAC verification; emits `payment.intent.succeeded`.
+
+### Wire-up
+```csharp
+using SmartPay.Api.Bootstrap;
+builder.Services.AddWp3Provider(builder.Configuration);
+```
+
+### Routes
+- `POST /api/payments/intent` body: `{ "currency":"GBP", "amount":100.00, "reference":"ORDER123" }`
+- `POST /api/payments/webhook/mock` headers: `MockPay-Signature: <hmac>` body: `{ "type":"payment_intent.succeeded", "intentId":"...", "tenantId":"default" }`
+
 ## V&V {#vv}
 ### Feature → Test mapping
 | Feature ID | Name | Test IDs | Evidence / Location |
 |-----------:|------|----------|---------------------|
-| E3.F1 | FX Quote API | SMK-E3-Quote-OK, SMK-E3-Quote-400 | Smoke_Features.md §3.3-A/B |
-| E3.F2 | API Documentation | SMK-E3-Swagger | Smoke_Features.md §3.3-C |
-| E3.F3 | Rate Retrieval | SMK-E3-Rates, PERF-E3-Response | Performance tests |
-| E3.F4 | Request Validation | SMK-E3-Validation, SEC-E3-Input | Security tests (Validation) |
+| E3.F1 | Provider routing (single) | SMK-E3-CreateIntent | `POST /api/payments/intent` |
+| E3.F1.N1 | Idempotency | UNIT-WP3-Idem | `ZEN/TESTS/WP3/IdempotencyTests.cs` |
+| E3.F2 | Webhook verify & publish | SMK-E3-MockWebhook | `POST /api/payments/webhook/mock` |
+| E3.F3 | FX Quote API | SMK-E3-Quote-OK, SMK-E3-Quote-400 | Smoke_Features.md §3.3-A/B |
+| E3.F4 | API Documentation | SMK-E3-Swagger | Smoke_Features.md §3.3-C |
+| E3.F5 | Rate Retrieval | SMK-E3-Rates, PERF-E3-Response | Performance tests |
+| E3.F6 | Request Validation | SMK-E3-Validation, SEC-E3-Input | Security tests (Validation) |
 
 ### Acceptance
+- Create intent returns provider/id/status; idempotent replays marked with header.
+- Valid HMAC on webhook required; publishes `payment.intent.succeeded`.
 - FX quote returns valid JSON; invalid requests return RFC7807 errors; Swagger UI accessible.
 
 ### Rollback

@@ -1,0 +1,30 @@
+name: Guardrails & VnV
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Restore & Build
+        run: dotnet build --configuration Release
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+      - name: Verify V&V artifacts exist
+        run: |
+          test -f DOCS/VnV/TraceabilityMatrix.csv
+          test -f WPS/INDEX.md
+          test -f Smoke_Features.md
+      - name: Check feature flag defaults (must be false)
+        run: |
+          ! grep -R "\"Enabled\": true" ZEN/SOURCE/Api/appsettings*.json || (echo "Enabled=true found in appsettings samples" && exit 1)
+      - name: Traceability sanity (WP3/WP7)
+        run: |
+          grep -q "WP3" DOCS/VnV/TraceabilityMatrix.csv
+          grep -q "WP7" DOCS/VnV/TraceabilityMatrix.csv

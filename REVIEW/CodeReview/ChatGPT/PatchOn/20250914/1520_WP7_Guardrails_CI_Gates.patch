@@ -1,0 +1,85 @@
+From 30cc4dd5ee6f701122334455 Mon Sep 15 15:20:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 15:20:00 +0100
+Subject: [WP7/CI] Guardrail CI gates: traceability check, flag defaults,
+ unit tests; docs badges
+X-Work-Package: WP7
+X-Patch-Name: 1520_WP7_Guardrails_CI_Gates.patch
+
+# Overview
+# This patch adds lightweight CI checks to enforce V&V discipline and guardrail
+# defaults, plus ensures WP7 unit tests run. No runtime code change.
+#
+---
+diff --git a/.github/workflows/guardrails.yml b/.github/workflows/guardrails.yml
+new file mode 100644
+index 0000000..1011121
+--- /dev/null
++++ b/.github/workflows/guardrails.yml
+@@ -0,0 +1,81 @@
++name: Guardrails & VnV
++on:
++  pull_request:
++  push:
++    branches: [ main ]
++jobs:
++  build-and-test:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Setup .NET
++        uses: actions/setup-dotnet@v4
++        with:
++          dotnet-version: '8.0.x'
++      - name: Restore & Build
++        run: dotnet build --configuration Release
++      - name: Test
++        run: dotnet test --configuration Release --no-build
++      - name: Verify V&V artifacts exist
++        run: |
++          test -f DOCS/VnV/TraceabilityMatrix.csv
++          test -f WPS/INDEX.md
++          test -f Smoke_Features.md
++      - name: Check feature flag defaults (must be false)
++        run: |
++          ! grep -R "\"Enabled\": true" ZEN/SOURCE/Api/appsettings*.json || (echo "Enabled=true found in appsettings samples" && exit 1)
++      - name: Traceability sanity (WP3/WP7)
++        run: |
++          grep -q "WP3" DOCS/VnV/TraceabilityMatrix.csv
++          grep -q "WP7" DOCS/VnV/TraceabilityMatrix.csv
++
+diff --git a/DOCS/VnV/VerificationAndValidation.md b/DOCS/VnV/VerificationAndValidation.md
+index b2c3d4e..c3d4e5f 100644
+--- a/DOCS/VnV/VerificationAndValidation.md
++++ b/DOCS/VnV/VerificationAndValidation.md
+@@ -64,6 +64,10 @@
+ 6) **Operations: documented runbook (enable/disable, rollback, dashboards).**
+ 
+ Fail any? Revert to MVP-optional and fix before next attempt.
++
++## CI Gates
++- Guardrails workflow runs unit tests, checks V&V artifacts, and enforces **flag defaults are false** in samples.
++- Extend with smoke runners as we add headless scenarios.
+diff --git a/README.md b/README.md
+index de46ff3..ef570a4 100644
+--- a/README.md
++++ b/README.md
+@@ -1,5 +1,9 @@
+ # RichMove.SmartPay — Overview
+ 
++![Guardrails CI](https://img.shields.io/badge/guardrails-CI-green)
++![V%26V](https://img.shields.io/badge/V%26V-enforced-blue)
++
+ This repository powers the SmartPay API and related admin/merchant UI.  
+ 
+ ## WP3 (Minimal Payment Provider)
+@@ -14,6 +18,8 @@
+ - Minimal Admin app under `ADMIN/SmartPay.AdminBlazor` (health + quote post demo).
+ - SDK generation steps: `TOOLS/SDK/README.md`.
+ 
++CI enforces V&V presence and safe defaults for feature flags.
++
+ ## WP5 (Event Bridge & RLS)
+ - **Webhooks (Outbound)**: HMAC-signed delivery with retrying outbox (opt-in via `appsettings.WP5.json`).
+ - **Composite Notifications**: SignalR (WP4) + Webhooks mirror.
+ - **RLS Templates**: `DB/SUPABASE/WP5_RLS.sql` + `DOCS/Data/RLS_Supabase.md` for tenant isolation.

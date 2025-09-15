@@ -20,6 +20,11 @@ E8.F2,Prometheus metrics endpoint (guarded),WP8,"SMK-E8-Metrics-404;SMK-E8-Metri
 E8.F3,Auto-scaling status endpoint (guarded),WP8,"SMK-E8-Scaling-404;SMK-E8-Scaling-401;SMK-E8-Scaling-200",UH,"MVP-allowed with guardrails"
 E8.F4,OpenTelemetry expansion,WP8,"PLAN-E8-OTel",UH,DOCS/OBSERVABILITY/OpenTelemetryPlan.md
 E8.F5,Non-FX domain stubs (Blockchain),WP8,"PLAN-E8-Blockchain",UH,"OTel plan mentions + commit refs"
+E3.F1,Provider routing (single),WP3,"SMK-E3-CreateIntent",UF,"POST /api/payments/intent"
+E3.F1.N1,Idempotency store,WP3,"UNIT-WP3-Idem",UH,"ZEN/TESTS/WP3/IdempotencyTests.cs"
+E3.F2,Webhook verify + publish,WP3,"SMK-E3-MockWebhook",UH,"POST /api/payments/webhook/mock"
+E7.F1,Admin UI (minimal),WP6,"SMK-E7-UI-Health;SMK-E7-UI-Quote",UF,"Manual run, posts to API"
+E7.F2,SDK generation scaffold,WP6,"PLAN-E7-SDK",UH,"TOOLS/SDK/README.md"
 WP7.F1,AdminOnly authorization policy,WP7,"UNIT-WP7-AdminPolicy-Role;UNIT-WP7-AdminPolicy-ApiKey",UH,"AdminPolicyTests.cs"
 WP7.F2,Feature flag configuration,WP7,"UNIT-WP7-FeatureFlags-Binding",UH,"WP7AppConfig.cs + tests"
 WP7.F3,Guarded metrics endpoint,WP7,"SMK-WP7-Metrics-404;SMK-WP7-Metrics-401;SMK-WP7-Metrics-200",UH,"AdminPolicyTests.cs"

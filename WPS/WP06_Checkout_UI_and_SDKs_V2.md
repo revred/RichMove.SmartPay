@@ -332,16 +332,33 @@ public class QuotesController : ControllerBase
 - **Upstream**: WP01 (Repository & Tooling), WP03 (API & Contracts), WP04 (Payment Orchestrator), WP05 (FX & Remittance SPI)
 - **Downstream**: WP07 (Merchant Dashboard), WP08 (Analytics & Reporting)
 
+## Minimal Admin UI Implementation (WP6)
+
+### Scope
+- Minimal Admin app (Blazor WebAssembly for now; SSR swap optional later) to verify APIs and demos.
+- OpenAPI-first SDK scaffolding (TS/C#) via CLI tools.
+
+### Running Admin (local)
+```bash
+cd ADMIN/SmartPay.AdminBlazor
+dotnet run
+```
+Set `ApiBaseUrl` via environment or `wwwroot/appsettings.json` if needed.
+
 ## V&V {#vv}
 ### Feature → Test mapping
 | Feature ID | Name | Test IDs | Evidence / Location |
 |-----------:|------|----------|---------------------|
-| E7.F1 | Blazor SSR UI | SMK-E7-Blazor, PERF-E7-TTFB | Smoke_Features.md §3.7-A/B |
-| E7.F2 | SDK Generation | SMK-E7-SDK, INTEG-E7-Client | Integration tests (SDK) |
-| E7.F3 | Real-time Updates | SMK-E7-SignalR, INTEG-E7-Live | Real-time tests |
-| E7.F4 | Performance Targets | PERF-E7-FCP, LOAD-E7-Scale | Performance tests |
+| E7.F1 | Admin UI (minimal) | SMK-E7-UI-Health | Admin calls `/health/ready` |
+| E7.F1.N1 | Create quote from UI | SMK-E7-UI-Quote | Admin posts to `/api/fx/quote` |
+| E7.F2 | SDK generation scaffold | PLAN-E7-SDK | `TOOLS/SDK/README.md` |
+| E7.F3 | Blazor SSR UI | SMK-E7-Blazor, PERF-E7-TTFB | Smoke_Features.md §3.7-A/B |
+| E7.F4 | SDK Generation | SMK-E7-SDK, INTEG-E7-Client | Integration tests (SDK) |
+| E7.F5 | Real-time Updates | SMK-E7-SignalR, INTEG-E7-Live | Real-time tests |
+| E7.F6 | Performance Targets | PERF-E7-FCP, LOAD-E7-Scale | Performance tests |
 
 ### Acceptance
+- Admin calls health endpoints and creates quotes; SDK generation documented.
 - Blazor UI renders <1.2s FCP; SDKs auto-generate from OpenAPI; real-time updates functional.
 
 ### Rollback

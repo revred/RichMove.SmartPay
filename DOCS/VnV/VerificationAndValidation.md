@@ -67,3 +67,7 @@ To **graduate** an MVP-optional feature to Core, we require a 7‑day clean run 
 6) Operations: documented runbook (enable/disable, rollback, dashboards).
 
 Fail any? Revert to MVP-optional and fix before next attempt.
+
+## CI Gates
+- Guardrails workflow runs unit tests, checks V&V artifacts, and enforces **flag defaults are false** in samples.
+- Extend with smoke runners as we add headless scenarios.

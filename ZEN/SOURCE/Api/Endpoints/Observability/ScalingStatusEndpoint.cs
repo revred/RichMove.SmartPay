@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using SmartPay.Api.Bootstrap;
+using System.Diagnostics;
 
 namespace SmartPay.Api.Endpoints.Observability;
 
@@ -18,7 +19,7 @@ public sealed class ScalingStatusEndpoint(IOptions<FeaturesOptions> flags) : End
     {
         Verbs(Http.GET);
         Routes("/scaling/status");
-        AllowAnonymous(false);
+        // Requires authorization via AdminOnly policy
         Policies("AdminOnly");
         // Note: rate limiter policy name via attribute
     }

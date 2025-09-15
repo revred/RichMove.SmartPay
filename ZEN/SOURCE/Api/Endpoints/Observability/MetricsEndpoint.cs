@@ -19,7 +19,7 @@ public sealed class MetricsEndpoint(IOptions<FeaturesOptions> flags) : EndpointW
     {
         Verbs(Http.GET);
         Routes("/metrics");
-        AllowAnonymous(false);
+        // Requires authorization via AdminOnly policy
         Policies("AdminOnly");
         // Note: rate limiter policy name via attribute
     }

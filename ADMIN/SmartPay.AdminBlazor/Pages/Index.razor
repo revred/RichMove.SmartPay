@@ -1,0 +1,156 @@
+@page "/"
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<PageTitle>SmartPay Dashboard</PageTitle>
+
+<h1>SmartPay Dashboard</h1>
+
+<div class="row">
+    <div class="col-md-6">
+        <h3>Health Check</h3>
+        <button class="btn btn-primary" @onclick="CheckHealth" disabled="@_loadingHealth">
+            @if (_loadingHealth)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Check /health/ready
+        </button>
+        @if (!string.IsNullOrEmpty(_health))
+        {
+            <div class="mt-2">
+                <strong>Result:</strong>
+                <pre class="bg-light p-2 border rounded">@_health</pre>
+            </div>
+        }
+    </div>
+
+    <div class="col-md-6">
+        <h3>Create FX Quote</h3>
+        <div class="mb-3">
+            <label class="form-label">Amount:</label>
+            <input @bind="_amount" type="number" step="0.01" class="form-control" min="0.01" />
+        </div>
+        <button class="btn btn-success" @onclick="CreateQuote" disabled="@_loadingQuote">
+            @if (_loadingQuote)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Create Quote
+        </button>
+        @if (!string.IsNullOrEmpty(_quote))
+        {
+            <div class="mt-2">
+                <strong>Result:</strong>
+                <pre class="bg-light p-2 border rounded">@_quote</pre>
+            </div>
+        }
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <h3>Create Payment Intent (WP3)</h3>
+        <div class="row">
+            <div class="col-md-4">
+                <label class="form-label">Currency:</label>
+                <input @bind="_currency" class="form-control" placeholder="GBP" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Amount:</label>
+                <input @bind="_paymentAmount" type="number" step="0.01" class="form-control" min="0.01" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Reference:</label>
+                <input @bind="_reference" class="form-control" placeholder="ORDER123" />
+            </div>
+        </div>
+        <button class="btn btn-info mt-3" @onclick="CreatePaymentIntent" disabled="@_loadingPayment">
+            @if (_loadingPayment)
+            {
+                <span class="spinner-border spinner-border-sm me-2"></span>
+            }
+            Create Payment Intent
+        </button>
+        @if (!string.IsNullOrEmpty(_paymentResult))
+        {
+            <div class="mt-2">
+                <strong>Result:</strong>
+                <pre class="bg-light p-2 border rounded">@_paymentResult</pre>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string? _health;
+    private decimal _amount = 100m;
+    private string? _quote;
+    private bool _loadingHealth;
+    private bool _loadingQuote;
+
+    // Payment intent fields
+    private string _currency = "GBP";
+    private decimal _paymentAmount = 100m;
+    private string _reference = "ORDER123";
+    private string? _paymentResult;
+    private bool _loadingPayment;
+
+    private async Task CheckHealth()
+    {
+        try
+        {
+            _loadingHealth = true;
+            _health = await Http.GetStringAsync("/health/ready");
+        }
+        catch (Exception ex)
+        {
+            _health = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loadingHealth = false;
+        }
+    }
+
+    private async Task CreateQuote()
+    {
+        try
+        {
+            _loadingQuote = true;
+            var response = await Http.PostAsJsonAsync("/api/fx/quote", new { fromCurrency = "USD", toCurrency = "GBP", amount = _amount });
+            _quote = await response.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex)
+        {
+            _quote = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loadingQuote = false;
+        }
+    }
+
+    private async Task CreatePaymentIntent()
+    {
+        try
+        {
+            _loadingPayment = true;
+            var response = await Http.PostAsJsonAsync("/api/payments/intent", new
+            {
+                currency = _currency,
+                amount = _paymentAmount,
+                reference = _reference
+            });
+            _paymentResult = await response.Content.ReadAsStringAsync();
+        }
+        catch (Exception ex)
+        {
+            _paymentResult = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            _loadingPayment = false;
+        }
+    }
+}
