@@ -155,6 +155,10 @@ public class SecurityHeadersMiddleware
 
     private void ApplyResponseSecurityHeaders(HttpContext context)
     {
+        // Don't modify headers after response has started
+        if (context.Response.HasStarted)
+            return;
+
         if (context.Response.StatusCode >= 400 && _options.RemoveServerHeaderOnError)
         {
             context.Response.Headers.Remove("Server");

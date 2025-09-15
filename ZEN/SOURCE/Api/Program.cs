@@ -79,7 +79,10 @@ builder.Services.AddCors(options =>
         var origins = cfg.GetSection("Cors:AllowedOrigins").Get<string[]>();
         if (origins is { Length: > 0 })
         {
-            policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+            policy.WithOrigins(origins)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials();
         }
         else
         {
@@ -96,7 +99,10 @@ builder.Services.AddCors(options =>
                 {
                     return false;
                 }
-            }).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+            })
+            .AllowAnyMethod()
+            .AllowAnyHeader()
+            .AllowCredentials();
         }
     });
 });
@@ -118,6 +124,9 @@ builder.Services.AddWp7Guardrails(builder.Configuration);
 
 var app = builder.Build();
 
+// CORS must be very early in pipeline
+app.UseCors("AdminCors");
+
 // WP3: wire middleware & feature-flagged ledger binding
 var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
 app.UseSmartPayPlatformHardening(loggerFactory);
@@ -128,6 +137,8 @@ app.UseWp4Features(builder.Configuration);
 // WP5: wire event bridge features
 app.UseWp5Features(builder.Configuration);
 
+app.UseHttpsRedirection();
+
 // WP7: wire guardrails (rate limiting, authorization)
 app.UseWp7Guardrails(builder.Configuration);
 
@@ -135,11 +146,8 @@ app.UseWp7Guardrails(builder.Configuration);
 app.UseFastEndpoints();
 app.UseSwaggerGen();
 
-app.UseHttpsRedirection();
-
-// Add CORS middleware
+// Routing
 app.UseRouting();
-app.UseCors("AdminCors");
 
 // Health endpoints per ChatGPT review
 app.MapGet("/health/live", () => Results.Ok("Healthy"))
