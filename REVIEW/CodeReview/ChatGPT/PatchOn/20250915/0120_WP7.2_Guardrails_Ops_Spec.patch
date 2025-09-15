@@ -1,0 +1,88 @@
+From d4e5f6a7b8 Mon Sep 15 18:20:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 18:20:00 +0100
+Subject: [WP7.2] Guardrails: admin auth semantics, cost monitoring,
+ promotion criteria & blast radius docs + samples
+X-Work-Package: WP7.2
+X-Patch-Name: 1820_WP7.2_Guardrails_Ops_Spec.patch
+
+---
+diff --git a/DOCS/Security/AdminAuth.md b/DOCS/Security/AdminAuth.md
+new file mode 100644
+index 0000000..11aa22b
+--- /dev/null
++++ b/DOCS/Security/AdminAuth.md
+@@ -0,0 +1,85 @@
++# Admin Auth (`AdminOnly`) — Semantics
++
++Grant if **role=Admin** or header `X-Admin-Token` matches configured secret (RED only).
++Endpoints: `/metrics` and `/scaling/status` additionally require feature flags On.
++When flags Off → return 404.
++
++## Verification
++- Flags Off → 404
++- Flags On + no auth → 401/403
++- Flags On + Admin → 200
++
++## Rate limits
++- `/metrics`: 10 rps, `/scaling/status`: 5 rps
++
+diff --git a/DOCS/Ops/CostMonitoring.md b/DOCS/Ops/CostMonitoring.md
+new file mode 100644
+index 0000000..22bb33c
+--- /dev/null
++++ b/DOCS/Ops/CostMonitoring.md
+@@ -0,0 +1,75 @@
++# Cost Monitoring (Azure-first)
++
++## Budgets
++- Azure Cost Management Budget: set monthly budget with email alert at 50/80/100%.
++
++## App Service / Container Apps
++- Keep min instances = 0 or 1; disable always-on in RED.
++- Turn off diagnostics where not needed.
++
++## Metrics sampling
++- Export only when needed; prefer text `/metrics` scraped privately.
++
+diff --git a/DOCS/Ops/PromotionCriteria.md b/DOCS/Ops/PromotionCriteria.md
+new file mode 100644
+index 0000000..33cc44d
+--- /dev/null
++++ b/DOCS/Ops/PromotionCriteria.md
+@@ -0,0 +1,62 @@
++# Feature Promotion Criteria (MVP-optional → Core)
++
++A feature can graduate when:
++1. CI green and coverage ≥ 60% on affected code.
++2. Smoke + acceptance checks pass and evidence linked in V&V hub.
++3. Cost impact within budget; no PII exposure.
++4. Blast radius documented and limited.
++
+diff --git a/DOCS/Ops/BlastRadius.md b/DOCS/Ops/BlastRadius.md
+new file mode 100644
+index 0000000..44dd55e
+--- /dev/null
++++ b/DOCS/Ops/BlastRadius.md
+@@ -0,0 +1,55 @@
++# Blast Radius Limits
++
++- Guard advanced endpoints with AdminOnly + flags.
++- Favor no-op defaults; bounded retries; dead-letter queues.
++- Prefer private network for metrics scraping.
++
+diff --git a/ZEN/SOURCE/Api/appsettings.WP7.sample.json b/ZEN/SOURCE/Api/appsettings.WP7.sample.json
+new file mode 100644
+index 0000000..55ee66f
+--- /dev/null
++++ b/ZEN/SOURCE/Api/appsettings.WP7.sample.json
+@@ -0,0 +1,14 @@
++{
++  "Features": {
++    "Monitoring": { "Enabled": false },
++    "Scaling": { "Enabled": false }
++  },
++  "Admin": {
++    "ApiKey": "change-me-dev-only"
++  }
++}

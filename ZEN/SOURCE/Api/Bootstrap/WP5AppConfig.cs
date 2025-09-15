@@ -11,10 +11,11 @@ public static class WP5AppConfig
     public static IServiceCollection AddWp5Features(this IServiceCollection services, IConfiguration cfg)
     {
         var options = new Wp5Options(cfg);
-        if (options.WebhooksEnabled)
-        {
-            WebhookRegistration.Add(services, cfg);
-        }
+        // Note: Old webhook system disabled in favor of new WP5 webhook outbox system
+        // if (options.WebhooksEnabled)
+        // {
+        //     WebhookRegistration.Add(services, cfg);
+        // }
         return services;
     }
 

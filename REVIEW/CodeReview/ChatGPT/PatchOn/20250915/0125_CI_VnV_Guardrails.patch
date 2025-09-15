@@ -1,0 +1,51 @@
+From e5f6a7b8c9 Mon Sep 15 18:25:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 18:25:00 +0100
+Subject: [CI/V&V] Guardrails workflow: doc presence, flag-defaults check,
+ smoke asset checks
+X-Work-Package: OPS
+X-Patch-Name: 1825_CI_VnV_Guardrails.patch
+
+---
+diff --git a/.github/workflows/guardrails.yml b/.github/workflows/guardrails.yml
+new file mode 100644
+index 0000000..aa00aa1
+--- /dev/null
++++ b/.github/workflows/guardrails.yml
+@@ -0,0 +1,70 @@
++name: Guardrails & VnV
++on:
++  pull_request:
++  push:
++    branches: [ master, main ]
++jobs:
++  guardrails:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - name: Check V&V artifacts
++        run: |
++          test -f WPS/INDEX.md
++          test -f DOCS/VnV/TraceabilityMatrix.csv || echo "TraceabilityMatrix.csv missing (warn)"
++          test -f Smoke_Features.md || echo "Smoke_Features.md missing (warn)"
++      - name: Check sample appsettings flags are OFF
++        run: |
++          ! grep -R '\"Enabled\": true' ZEN/SOURCE/Api/appsettings*.json 2>/dev/null || (echo "Enabled=true found in sample configs" && exit 1)
++      - name: Smoke assets present
++        run: |
++          test -f Smoke/payments.intent.http
++          test -f Smoke/payments.mock.webhook.http
++          test -f Smoke/webhooks.consumer.http
++
+diff --git a/DEVX/smoke/README.md b/DEVX/smoke/README.md
+new file mode 100644
+index 0000000..bb11bb2
+--- /dev/null
++++ b/DEVX/smoke/README.md
+@@ -0,0 +1,22 @@
++# Smoke Instructions
++
++Use VS Code REST client or `curl` to run files under `Smoke/`:
++- `payments.intent.http` (create + replay)
++- `payments.mock.webhook.http` (signed webhook)
++- `webhooks.consumer.http` (mock receiver)

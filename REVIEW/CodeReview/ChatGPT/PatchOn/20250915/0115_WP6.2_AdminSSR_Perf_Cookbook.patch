@@ -1,0 +1,90 @@
+From c3d4e5f6a7 Mon Sep 15 18:15:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 18:15:00 +0100
+Subject: [WP6.2] Admin SSR perf cookbook + SDK consumption snippets; admin
+ README
+X-Work-Package: WP6.2
+X-Patch-Name: 1815_WP6.2_AdminSSR_Perf_Cookbook.patch
+
+---
+diff --git a/DOCS/Perf/Blazor.Fast.md b/DOCS/Perf/Blazor.Fast.md
+new file mode 100644
+index 0000000..bbccdde
+--- /dev/null
++++ b/DOCS/Perf/Blazor.Fast.md
+@@ -0,0 +1,70 @@
++# Blazor Server — Lightning Fast (WP6.2)
++
++- Use `ServerPrerendered`; keep component state tiny.
++- Reuse `HttpClient` via `IHttpClientFactory`.
++- Prefer plain forms & tables; no heavy UI libs.
++- Turn off tracing/metrics in RED; enable sampling only in GREEN.
++
++## Perf budget
++- TTFB < 300ms local, < 600ms min-tier GREEN.
++- FCP < 1.2s on low-end devices.
++
++## Circuit tips
++- Avoid large graphs in `@code` state.
++- Stream results if payloads are large (rare in admin).
++
+diff --git a/DOCS/UI/Blazor/Plan.md b/DOCS/UI/Blazor/Plan.md
+new file mode 100644
+index 0000000..ccddeef
+--- /dev/null
++++ b/DOCS/UI/Blazor/Plan.md
+@@ -0,0 +1,52 @@
++# Admin SSR — Consumption Plan (WP6)
++
++**Goal:** Keep costs near-zero while providing a minimal admin.
++
++## Data flows
++- Health → GET `/health/ready`
++- FX quote demo → POST `/api/fx/quote`
++
++## Hosting
++- Azure App Service (B1) or Container Apps min scale; scale-to-zero when idle.
++
++## Notes
++- SSR avoids bundling; no SPA downloads.
++
+diff --git a/ADMIN/SmartPay.AdminBlazor/README.md b/ADMIN/SmartPay.AdminBlazor/README.md
+new file mode 100644
+index 0000000..ddeeff0
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminBlazor/README.md
+@@ -0,0 +1,45 @@
++# SmartPay Admin (Blazor Server)
++
++## Run locally
++```bash
++dotnet run --project ADMIN/SmartPay.AdminBlazor
++```
++
++Set `ApiBaseUrl` in `appsettings.Development.json` or env var.
++
++## Pages
++- Health check ping
++- FX quote form
++
++## Cost notes
++- Keep always-on disabled; use scale-to-zero where available.
++
+diff --git a/TOOLS/SDK/README.md b/TOOLS/SDK/README.md
+new file mode 100644
+index 0000000..eeff001
+--- /dev/null
++++ b/TOOLS/SDK/README.md
+@@ -0,0 +1,40 @@
++# SDK Generation (OpenAPI) — WP6
++
++## TypeScript
++```bash
++npx openapi-typescript http://localhost:5001/swagger/v1/swagger.json -o TOOLS/SDK/types/smartpay.ts
++```
++
++## C#
++```bash
++dotnet tool install --global NSwag.ConsoleCore
++nswag openapi2csclient /input:http://localhost:5001/swagger/v1/swagger.json /classname:SmartPayClient /namespace:SmartPay.Sdk /output:TOOLS/SDK/csharp/SmartPayClient.cs
++```

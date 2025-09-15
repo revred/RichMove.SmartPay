@@ -1,0 +1,115 @@
+From a1b2c3d4e5 Mon Sep 15 18:05:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 18:05:00 +0100
+Subject: [WP3.3] Payments docs+smoke alignment with idempotency & error
+ model; traceability refresh
+X-Work-Package: WP3.3
+X-Patch-Name: 1805_WP3.3_Payments_Align_VnV.patch
+
+---
+diff --git a/WPS/WP3.md b/WPS/WP3.md
+new file mode 100644
+index 0000000..e3a1f2c
+--- /dev/null
++++ b/WPS/WP3.md
+@@ -0,0 +1,85 @@
++# WP3 — Payments (Minimal Provider) — V&V Alignment
++
++This document aligns the already-implemented minimal provider with crisp **idempotency semantics**, **error model**, and **smoke coverage**.
++
++## Scope
++- `POST /api/payments/intent` (Mock provider).
++- `POST /api/payments/webhook/mock` with `MockPay-Signature` (HMAC-SHA256 of raw body).
++- Idempotency: `Idempotency-Key` header, TTL 24h; duplicate → `Idempotent-Replay: true` response header.
++
++## Error Model
++| HTTP | Code | When | Notes |
++|---:|---|---|---|
++| 400 | invalid_request | Amount <= 0, currency missing/invalid | MVP behavior |
++| 401 | unauthorized | (Future) if endpoint secured | Currently open for demo |
++| 409 | idempotency_conflict | Reserved for strict semantics | Not used in MVP |
++
++## V&V (Traceability)
++| Feature ID | Name | Test IDs | Evidence |
++|-----------:|------|----------|---------|
++| E3.F1 | Create payment intent | SMK-E3-CreateIntent | `Smoke/payments.intent.http` |
++| E3.F1.N1 | Idempotency replay marker | SMK-E3-IdemReplay | `Smoke/payments.intent.http` (repeat) |
++| E3.F2 | Webhook signature verify | SMK-E3-MockWebhook | `Smoke/payments.mock.webhook.http` |
++
++## Acceptance
++- Replay requests do not create duplicates and include the `Idempotent-Replay` header.
++- Webhook rejects invalid signature.
++- Provider returns `requires_confirmation` and a `clientSecret` for demo.
++
++## Smoke
++```http
++# Create intent
++POST http://localhost:5001/api/payments/intent
++Content-Type: application/json
++Idempotency-Key: idem-001
++
++{ "currency":"GBP", "amount":100.00, "reference":"ORDER-001" }
++
++### Replay (expect Idempotent-Replay header)
++POST http://localhost:5001/api/payments/intent
++Content-Type: application/json
++Idempotency-Key: idem-001
++
++{ "currency":"GBP", "amount":100.00, "reference":"ORDER-001" }
++```
++
++```http
++# Mock webhook (sign body and place hex in header)
++POST http://localhost:5001/api/payments/webhook/mock
++Content-Type: application/json
++MockPay-Signature: <hex hmacsha256(body, secret)>
++
++{ "type":"payment_intent.succeeded", "intentId":"mpi_123", "tenantId":"default" }
++```
+diff --git a/DOCS/API/Payments.md b/DOCS/API/Payments.md
+new file mode 100644
+index 0000000..1a2b3c4
+--- /dev/null
++++ b/DOCS/API/Payments.md
+@@ -0,0 +1,70 @@
++# Payments API — Minimal Path (WP3)
++
++## Create Intent — `POST /api/payments/intent`
++Headers: `Idempotency-Key` (optional). Body `{ "currency":"GBP","amount":100.00,"reference":"ORDER123" }`.
++Response: `{ "provider":"MockPay","intentId":"mpi_...","status":"requires_confirmation","clientSecret":"..." }`.
++Replay header: `Idempotent-Replay: true` when same key within TTL.
++
++## Webhook — `POST /api/payments/webhook/mock`
++Header: `MockPay-Signature: <hex hmacsha256(payload, secret)>`.
++Body: `{ "type":"payment_intent.succeeded","intentId":"mpi_...","tenantId":"default" }`.
++On success, emits `payment.intent.succeeded` via realtime/webhooks mirror.
+diff --git a/Smoke/payments.intent.http b/Smoke/payments.intent.http
+new file mode 100644
+index 0000000..5c6d7e8
+--- /dev/null
++++ b/Smoke/payments.intent.http
+@@ -0,0 +1,24 @@
++# Create & Replay
++POST http://localhost:5001/api/payments/intent
++Content-Type: application/json
++Idempotency-Key: idem-001
++
++{ "currency":"GBP","amount":100.00,"reference":"ORDER-001" }
++
++###
++POST http://localhost:5001/api/payments/intent
++Content-Type: application/json
++Idempotency-Key: idem-001
++
++{ "currency":"GBP","amount":100.00,"reference":"ORDER-001" }
+diff --git a/Smoke/payments.mock.webhook.http b/Smoke/payments.mock.webhook.http
+new file mode 100644
+index 0000000..6d7e8f9
+--- /dev/null
++++ b/Smoke/payments.mock.webhook.http
+@@ -0,0 +1,9 @@
++POST http://localhost:5001/api/payments/webhook/mock
++Content-Type: application/json
++MockPay-Signature: <hex hmac of body>
++
++{ "type":"payment_intent.succeeded","intentId":"mpi_123","tenantId":"default" }

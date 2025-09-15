@@ -1,0 +1,88 @@
+From b2c3d4e5f6 Mon Sep 15 18:10:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 18:10:00 +0100
+Subject: [WP5.2] Outbound webhooks & RLS: consumer guide, verification steps,
+ appsettings sample, smoke
+X-Work-Package: WP5.2
+X-Patch-Name: 1810_WP5.2_Webhooks_RLS_VnV.patch
+
+---
+diff --git a/DOCS/API/Webhooks.Outbound.md b/DOCS/API/Webhooks.Outbound.md
+new file mode 100644
+index 0000000..7aa8bb1
+--- /dev/null
++++ b/DOCS/API/Webhooks.Outbound.md
+@@ -0,0 +1,85 @@
++# Outbound Webhooks (WP5)
++
++## Delivery
++- `POST` JSON with header `X-SmartPay-Signature: <hex hmacsha256(payload, secret)>`.
++- Retries: exponential backoff; dead-letter after max attempts.
++
++## Consumer example (C#)
++```csharp
++app.MapPost("/merchant/webhooks/smartpay", async (HttpRequest req) =>
++{
++    using var r = new StreamReader(req.Body);
++    var payload = await r.ReadToEndAsync();
++    var sig = req.Headers["X-SmartPay-Signature"].ToString();
++    var secret = Environment.GetEnvironmentVariable("SMARTPAY_WEBHOOK_SECRET")!;
++    var ok = Crypto.VerifyHmacSha256Hex(payload, sig, secret);
++    return ok ? Results.Ok() : Results.BadRequest();
++});
++```
++
++## Events
++- `payment.intent.created`
++- `payment.intent.succeeded`
++
++## V&V
++| Feature | Test | Evidence |
++|---|---|---|
++| Signed delivery | SMK-WP5-Signature | Receiver logs |
++| Retry/backoff | OBS-WP5-Backoff | Worker logs show increasing delay |
++
+diff --git a/DOCS/Data/RLS_Supabase.md b/DOCS/Data/RLS_Supabase.md
+new file mode 100644
+index 0000000..8bb9cc2
+--- /dev/null
++++ b/DOCS/Data/RLS_Supabase.md
+@@ -0,0 +1,65 @@
++# Supabase RLS Verification (WP5)
++
++Prove tenant isolation in RED.
++
++## Steps
++1. Create tenants A and B; insert sample rows.
++2. Connect as A; ensure queries for B return 0 rows.
++3. Repeat for B vs A.
++4. Cross-tenant writes must be blocked with RLS error.
++5. Capture evidence to `DOCS/VnV/Evidence/RLS/*.md`.
++
++## Smoke via API
++Use tenant header to ensure only tenant-scoped data is returned.
++
+diff --git a/ZEN/SOURCE/Api/appsettings.WP5.sample.json b/ZEN/SOURCE/Api/appsettings.WP5.sample.json
+new file mode 100644
+index 0000000..9cc0dd3
+--- /dev/null
++++ b/ZEN/SOURCE/Api/appsettings.WP5.sample.json
+@@ -0,0 +1,9 @@
++{
++  "Webhooks": {
++    "Enabled": false,
++    "Secret": "replace-me",
++    "MaxAttempts": 6
++  }
++}
+diff --git a/Smoke/webhooks.consumer.http b/Smoke/webhooks.consumer.http
+new file mode 100644
+index 0000000..a0b1c2d
+--- /dev/null
++++ b/Smoke/webhooks.consumer.http
+@@ -0,0 +1,9 @@
++POST http://localhost:5055/merchant/webhooks/smartpay
++Content-Type: application/json
++X-SmartPay-Signature: <signature>
++
++{ "type":"payment.intent.succeeded", "intentId":"mpi_123" }

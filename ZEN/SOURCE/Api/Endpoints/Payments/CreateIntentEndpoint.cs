@@ -1,9 +1,10 @@
 using FastEndpoints;
+using RichMove.SmartPay.Api.Idempotency;
+using RichMove.SmartPay.Core.Time;
 using SmartPay.Api.Payments;
 using SmartPay.Core.MultiTenancy;
 using SmartPay.Core.Notifications;
 using SmartPay.Core.Payments;
-using SmartPay.Core.Payments.Idempotency;
 
 namespace SmartPay.Api.Endpoints.Payments;
 
@@ -26,6 +27,7 @@ public sealed class CreateIntentEndpoint(
     IProviderRouter router,
     IIdempotencyStore idem,
     INotificationService notifier,
+    IClock clock,
     ILogger<CreateIntentEndpoint> log) : Endpoint<CreateIntentRequest, CreateIntentResponse>
 {
     public override void Configure()
@@ -54,7 +56,11 @@ public sealed class CreateIntentEndpoint(
             idemKey = Guid.NewGuid().ToString("N");
             HttpContext.Response.Headers.Append("Idempotency-Key", idemKey);
         }
-        var ok = await idem.TryAddAsync(tenantId, idemKey, TimeSpan.FromHours(24), ct);
+
+        // Create tenant-aware idempotency key
+        var tenantAwareKey = $"{tenantId}::{idemKey}";
+        var expiresAt = clock.UtcNow.AddHours(24);
+        var ok = await idem.TryPutAsync(tenantAwareKey, expiresAt, ct);
         if (!ok)
         {
             // Idempotent replay; return 200 with marker
