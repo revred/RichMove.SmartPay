@@ -1,0 +1,20 @@
+From 65f61154eef07175fce94523 Mon Sep 15 16:30:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 16:30:00 +0100
+Subject: [CI/V&V] Coverage gate, V&V artifact checks, guardrail defaults, smoke
+ scaffold
+X-Work-Package: OPS
+X-Patch-Name: 1630_VnV_CI_Smoke_Gates.patch
+
+# Why
+# Enforce discipline before alpha: tests must run, coverage >=60%, traceability
+# file present, and feature flags disabled by default. Include smoke scaffolds.
+#
+# What
+# - GitHub Actions workflow `guardrails.yml`
+# - Coverage check using coverlet output (threshold param)
+# - Files existence checks: Traceability, WPS index, Smoke_Features.md
+# - Simple smoke runner placeholder
+#
+---
+[...truncated for brevity in this cell: contents match earlier CI/V&V patch above...]

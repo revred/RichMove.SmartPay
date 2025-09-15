@@ -1,0 +1,183 @@
+From 63d4ff32cc9d5f43eac72301 Mon Sep 15 16:20:00 2025
+From: ChatGPT <dev@richmove.co.uk>
+Date: Mon, 15 Sep 2025 16:20:00 +0100
+Subject: [WP6] Admin SSR (Blazor Server) minimal + SDK generation scaffolding
+X-Work-Package: WP6
+X-Patch-Name: 1620_WP6_AdminSSR_SDK.patch
+
+# Why
+# Provide a low-cost, server-rendered admin to visualise health and core flows.
+# Add SDK generation scaffold to unblock partner integrations.
+#
+# What
+# - New Blazor Server app under ADMIN/SmartPay.AdminServer
+# - Pages: Health, FX Quote (calls existing endpoint)
+# - SDK generation README (TS/C#) using OpenAPI
+#
+---
+diff --git a/ADMIN/SmartPay.AdminServer/SmartPay.AdminServer.csproj b/ADMIN/SmartPay.AdminServer/SmartPay.AdminServer.csproj
+new file mode 100644
+index 0000000..1111aaa
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminServer/SmartPay.AdminServer.csproj
+@@ -0,0 +1,19 @@
++<Project Sdk="Microsoft.NET.Sdk.Web">
++  <PropertyGroup>
++    <TargetFramework>net8.0</TargetFramework>
++    <Nullable>enable</Nullable>
++    <ImplicitUsings>enable</ImplicitUsings>
++  </PropertyGroup>
++  <ItemGroup>
++    <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="8.0.7" />
++    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="8.0.7" />
++    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.7" />
++  </ItemGroup>
++</Project>
+diff --git a/ADMIN/SmartPay.AdminServer/Program.cs b/ADMIN/SmartPay.AdminServer/Program.cs
+new file mode 100644
+index 0000000..2222bbb
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminServer/Program.cs
+@@ -0,0 +1,44 @@
++var builder = WebApplication.CreateBuilder(args);
++builder.Services.AddRazorPages();
++builder.Services.AddServerSideBlazor();
++builder.Services.AddHttpClient("api", (sp, http) =>
++{
++    var cfg = sp.GetRequiredService<IConfiguration>();
++    http.BaseAddress = new Uri(cfg["ApiBaseUrl"] ?? "http://localhost:5001");
++});
++
++var app = builder.Build();
++if (!app.Environment.IsDevelopment())
++{
++    app.UseExceptionHandler("/Error");
++    app.UseHsts();
++}
++
++app.UseHttpsRedirection();
++app.UseStaticFiles();
++app.UseRouting();
++
++app.MapBlazorHub();
++app.MapFallbackToPage("/_Host");
++
++app.Run();
+diff --git a/ADMIN/SmartPay.AdminServer/Pages/_Host.cshtml b/ADMIN/SmartPay.AdminServer/Pages/_Host.cshtml
+new file mode 100644
+index 0000000..3333ccc
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminServer/Pages/_Host.cshtml
+@@ -0,0 +1,26 @@
++@page "/"
++@namespace SmartPay.AdminServer.Pages
++@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
++@{
++    Layout = null;
++}
++<!DOCTYPE html>
++<html>
++<head>
++    <meta charset="utf-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>SmartPay Admin</title>
++</head>
++<body>
++    <app>
++        <component type="typeof(App)" render-mode="ServerPrerendered" />
++    </app>
++    <script src="_framework/blazor.server.js"></script>
++</body>
++</html>
+diff --git a/ADMIN/SmartPay.AdminServer/App.razor b/ADMIN/SmartPay.AdminServer/App.razor
+new file mode 100644
+index 0000000..4444ddd
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminServer/App.razor
+@@ -0,0 +1,18 @@
++<Router AppAssembly="@typeof(App).Assembly">
++    <Found Context="routeData">
++        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
++    </Found>
++    <NotFound>
++        <LayoutView Layout="@typeof(MainLayout)">
++            <p>Sorry, there's nothing at this address.</p>
++        </LayoutView>
++    </NotFound>
++</Router>
+diff --git a/ADMIN/SmartPay.AdminServer/MainLayout.razor b/ADMIN/SmartPay.AdminServer/MainLayout.razor
+new file mode 100644
+index 0000000..5555eee
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminServer/MainLayout.razor
+@@ -0,0 +1,19 @@
++@inherits LayoutComponentBase
++<div class="page">
++    <div class="sidebar">
++        <h3>SmartPay Admin</h3>
++        <NavLink href="">Dashboard</NavLink>
++    </div>
++    <div class="content">
++        @Body
++    </div>
++</div>
+diff --git a/ADMIN/SmartPay.AdminServer/Pages/Index.razor b/ADMIN/SmartPay.AdminServer/Pages/Index.razor
+new file mode 100644
+index 0000000..6666fff
+--- /dev/null
++++ b/ADMIN/SmartPay.AdminServer/Pages/Index.razor
+@@ -0,0 +1,72 @@
++@page "/"
++@inject IHttpClientFactory Clients
++
++<h1>SmartPay Dashboard</h1>
++
++<h3>Health</h3>
++<button @onclick="CheckHealth">Check /health/ready</button>
++<pre>@_health</pre>
++
++<h3>Create FX Quote</h3>
++<input @bind="_amount" type="number" step="0.01" />
++<button @onclick="CreateQuote">Create</button>
++<pre>@_quote</pre>
++
++@code {
++    private string? _health;
++    private decimal _amount = 100m;
++    private string? _quote;
++
++    private async Task<HttpClient> Api() => Clients.CreateClient("api");
++
++    private async Task CheckHealth()
++    {
++        _health = await (await Api()).GetStringAsync("/health/ready");
++    }
++
++    private async Task CreateQuote()
++    {
++        var res = await (await Api()).PostAsJsonAsync("/api/fx/quote", new { fromCurrency = "USD", toCurrency = "GBP", amount = _amount });
++        _quote = await res.Content.ReadAsStringAsync();
++    }
++}
+diff --git a/TOOLS/SDK/README.md b/TOOLS/SDK/README.md
+new file mode 100644
+index 0000000..7777abc
+--- /dev/null
++++ b/TOOLS/SDK/README.md
+@@ -0,0 +1,56 @@
++# SDK Generation (WP6)
++
++Generate clients from the OpenAPI served at `/swagger/v1/swagger.json`.
++
++## TypeScript (openapi-typescript)
++```bash
++npx openapi-typescript http://localhost:5001/swagger/v1/swagger.json -o ./TOOLS/SDK/types/smartpay.ts
++```
++
++## C# (NSwag CLI)
++```bash
++dotnet tool install --global NSwag.ConsoleCore
++nswag openapi2csclient /input:http://localhost:5001/swagger/v1/swagger.json /classname:SmartPayClient /namespace:SmartPay.Sdk /output:./TOOLS/SDK/csharp/SmartPayClient.cs
++```
++
++> Run these offline in dev; commit generated clients only on release tags.
