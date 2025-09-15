@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using SmartPay.Infrastructure.MultiTenancy;
-using Xunit;
 
 namespace SmartPay.Tests.WP4;
 

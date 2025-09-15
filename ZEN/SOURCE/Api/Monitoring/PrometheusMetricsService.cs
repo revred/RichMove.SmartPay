@@ -1,7 +1,6 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Diagnostics.Metrics;
 using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 
 namespace RichMove.SmartPay.Api.Monitoring;
 

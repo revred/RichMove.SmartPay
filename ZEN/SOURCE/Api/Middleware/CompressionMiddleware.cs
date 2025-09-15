@@ -1,7 +1,5 @@
-using System.IO.Compression;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.IO.Compression;
 
 namespace RichMove.SmartPay.Api.Middleware;
 

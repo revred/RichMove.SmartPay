@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Configuration;
-
 namespace SmartPay.Api.Bootstrap;
 
 public sealed class Wp4Options

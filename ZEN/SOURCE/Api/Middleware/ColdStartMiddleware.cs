@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Http;
 using RichMove.SmartPay.Api.Monitoring;
 
 namespace RichMove.SmartPay.Api.Middleware;

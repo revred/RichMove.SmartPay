@@ -1,5 +1,4 @@
 using System.Diagnostics.Metrics;
-using Microsoft.Extensions.Logging;
 
 namespace RichMove.SmartPay.Api.Monitoring;
 

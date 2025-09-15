@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using RichMove.SmartPay.Api.Security;
 using RichMove.SmartPay.Api.Compliance;
+using RichMove.SmartPay.Api.Security;
 
 namespace RichMove.SmartPay.Api.Controllers;
 

@@ -1,7 +1,6 @@
-using System.Runtime.CompilerServices;
-using Microsoft.Extensions.Logging;
-using System.Collections.ObjectModel;
 using RichMove.SmartPay.Core.Time;
+using System.Collections.ObjectModel;
+using System.Runtime.CompilerServices;
 
 namespace RichMove.SmartPay.Api.Performance;
 

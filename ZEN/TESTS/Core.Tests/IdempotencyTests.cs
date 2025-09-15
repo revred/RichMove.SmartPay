@@ -1,5 +1,4 @@
 using SmartPay.Core.Payments.Idempotency;
-using Xunit;
 
 namespace SmartPay.Tests.WP3;
 

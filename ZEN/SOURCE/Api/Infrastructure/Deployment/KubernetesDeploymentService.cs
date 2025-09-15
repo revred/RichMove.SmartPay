@@ -1,7 +1,5 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
-using System.Text.Json;
 
 namespace RichMove.SmartPay.Api.Infrastructure.Deployment;
 

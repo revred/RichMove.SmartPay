@@ -1,5 +1,4 @@
 using FastEndpoints;
-using Microsoft.AspNetCore.Http;
 using RichMove.SmartPay.Infrastructure.Blockchain;
 
 namespace RichMove.SmartPay.Api.Endpoints.Blockchain.Base;

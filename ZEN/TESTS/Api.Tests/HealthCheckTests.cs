@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Mvc.Testing;
 using FluentAssertions;
 using System.Net;
 

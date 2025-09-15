@@ -1,5 +1,5 @@
-using System.Net;
 using Microsoft.Extensions.Options;
+using System.Net;
 
 namespace RichMove.SmartPay.Api.Middleware;
 

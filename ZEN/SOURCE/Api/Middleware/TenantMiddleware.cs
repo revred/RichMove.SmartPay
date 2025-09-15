@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Configuration;
 using SmartPay.Core.MultiTenancy;
 
 namespace SmartPay.Api.Middleware;

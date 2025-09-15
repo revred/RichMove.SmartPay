@@ -18,7 +18,7 @@ Minimal Blazor WebAssembly admin app for testing SmartPay APIs and demonstrating
 ### Start the Admin App
 
 ```bash
-cd ADMIN/SmartPay.AdminBlazor
+cd ZEN/ADMIN/SmartPay.AdminBlazor
 dotnet run
 ```
 

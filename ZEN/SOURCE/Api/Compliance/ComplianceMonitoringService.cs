@@ -1,9 +1,8 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.Concurrent;
-using System.Text.Json;
-using System.Diagnostics.Metrics;
 using RichMove.SmartPay.Core.Compliance;
+using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
+using System.Text.Json;
 
 namespace RichMove.SmartPay.Api.Compliance;
 
@@ -131,7 +130,7 @@ public sealed partial class ComplianceMonitoringService : IHostedService, IDispo
                     violations.AddRange(await CheckIso27001Compliance());
                     break;
 
-                // NIST framework not included in canonical implementation
+                    // NIST framework not included in canonical implementation
             }
 
             status.Status = violations.Count == 0 ? ComplianceState.Passing : ComplianceState.Failing;

@@ -1,7 +1,7 @@
 #pragma warning disable CA1707, CA1307
-using System.Text.Json;
 using RichMove.SmartPay.Core.Blockchain;
 using RichMove.SmartPay.Infrastructure.Blockchain;
+using System.Text.Json;
 
 namespace RichMove.SmartPay.Core.Tests.Blockchain;
 

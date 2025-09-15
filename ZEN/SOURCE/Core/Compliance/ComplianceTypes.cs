@@ -1,5 +1,3 @@
-using System;
-
 namespace RichMove.SmartPay.Core.Compliance
 {
     /// <summary>

@@ -1,6 +1,4 @@
-using System.Text.Json;
 using SmartPay.Infrastructure.Webhooks;
-using Xunit;
 
 namespace SmartPay.Tests.WP5;
 

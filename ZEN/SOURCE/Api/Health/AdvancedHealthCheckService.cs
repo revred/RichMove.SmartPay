@@ -1,11 +1,7 @@
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using System.Net.NetworkInformation;
-using System.Text.Json;
 
 namespace RichMove.SmartPay.Api.Health;
 

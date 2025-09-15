@@ -1,8 +1,5 @@
-using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
 using RichMove.SmartPay.Api.Tests;
-using Xunit;
+using System.Net;
 
 namespace SmartPay.Tests.WP4;
 

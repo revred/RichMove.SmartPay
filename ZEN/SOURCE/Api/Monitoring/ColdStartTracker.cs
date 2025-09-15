@@ -1,7 +1,5 @@
-using System.Diagnostics;
-using Microsoft.Extensions.Logging;
-using RichMove.SmartPay.Api.Diagnostics;
 using RichMove.SmartPay.Core.Time;
+using System.Diagnostics;
 
 namespace RichMove.SmartPay.Api.Monitoring;
 

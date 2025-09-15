@@ -1,4 +1,3 @@
-using FastEndpoints;
 using RichMove.SmartPay.Api.Endpoints.Blockchain.Base;
 using RichMove.SmartPay.Infrastructure.Blockchain;
 using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
@@ -35,7 +34,8 @@ public sealed class CreateWalletEndpoint : BlockchainEndpoint<CreateWalletReques
     {
         Post("/v1/chain/wallets");
         AllowAnonymous();
-        Summary(s => {
+        Summary(s =>
+        {
             s.Summary = "Create wallet record";
             s.Description = "Adds a user or custodial wallet for a given chain/network";
         });

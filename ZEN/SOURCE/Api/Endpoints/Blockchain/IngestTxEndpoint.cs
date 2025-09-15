@@ -1,4 +1,3 @@
-using FastEndpoints;
 using RichMove.SmartPay.Api.Endpoints.Blockchain.Base;
 using RichMove.SmartPay.Infrastructure.Blockchain;
 using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
@@ -41,7 +40,8 @@ public sealed class IngestTxEndpoint : BlockchainEndpoint<IngestTxRequest, Inges
     {
         Post("/v1/chain/tx/ingest");
         AllowAnonymous();
-        Summary(s => {
+        Summary(s =>
+        {
             s.Summary = "Ingest on-chain transaction";
             s.Description = "Stores on-chain tx and optionally creates a settlement+legs for a payment intent";
         });

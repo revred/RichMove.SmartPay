@@ -1,7 +1,3 @@
-using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http;
 using RichMove.SmartPay.Api.Constants;
 
 namespace RichMove.SmartPay.Api.Handlers;

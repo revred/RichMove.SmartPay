@@ -1,15 +1,14 @@
-using RichMove.SmartPay.Core.ForeignExchange;
-using RichMove.SmartPay.Core.Integrations;
-using RichMove.SmartPay.Infrastructure.ForeignExchange;
-using RichMove.SmartPay.Infrastructure.Integrations;
-using RichMove.SmartPay.Infrastructure.Blockchain;
-using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
 using FastEndpoints;
 using FastEndpoints.Swagger;
-using Microsoft.Extensions.Logging;
 using Npgsql;
 using RichMove.SmartPay.Api.Extensions;
 using RichMove.SmartPay.Api.Health;
+using RichMove.SmartPay.Core.ForeignExchange;
+using RichMove.SmartPay.Core.Integrations;
+using RichMove.SmartPay.Infrastructure.Blockchain;
+using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
+using RichMove.SmartPay.Infrastructure.ForeignExchange;
+using RichMove.SmartPay.Infrastructure.Integrations;
 using SmartPay.Api.Bootstrap;
 
 var builder = WebApplication.CreateBuilder(args);

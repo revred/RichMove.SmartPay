@@ -1,7 +1,6 @@
 #pragma warning disable CA1515, CA2007, CA1860, xUnit2020
-using System.Text.Json;
 using NJsonSchema;
-using Xunit;
+using System.Text.Json;
 
 namespace RichMove.SmartPay.Api.Tests.Helpers;
 

@@ -1,9 +1,7 @@
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
-using System.Text.Json;
-using System.Security.Cryptography;
 using System.Reflection;
+using System.Security.Cryptography;
 
 namespace RichMove.SmartPay.Api.Security;
 

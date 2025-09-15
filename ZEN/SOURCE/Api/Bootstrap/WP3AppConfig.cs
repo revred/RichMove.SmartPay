@@ -1,5 +1,3 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using SmartPay.Api.Payments;
 using SmartPay.Core.Payments;
 using SmartPay.Core.Payments.Idempotency;

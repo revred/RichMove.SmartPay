@@ -1,12 +1,11 @@
 #pragma warning disable CA1707, CA2007, CA1515
-using System.Net;
-using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using RichMove.SmartPay.Api.Tests.Helpers;
 using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
-using Xunit;
+using System.Net;
+using System.Net.Http.Json;
 
 namespace RichMove.SmartPay.Api.Tests;
 

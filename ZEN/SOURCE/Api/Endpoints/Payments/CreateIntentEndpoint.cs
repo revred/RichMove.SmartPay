@@ -1,9 +1,9 @@
 using FastEndpoints;
 using SmartPay.Api.Payments;
 using SmartPay.Core.MultiTenancy;
+using SmartPay.Core.Notifications;
 using SmartPay.Core.Payments;
 using SmartPay.Core.Payments.Idempotency;
-using SmartPay.Core.Notifications;
 
 namespace SmartPay.Api.Endpoints.Payments;
 

@@ -1,7 +1,5 @@
-using Microsoft.AspNetCore.Mvc.Testing;
 using FluentAssertions;
 using System.Net;
-using System.Net.Http.Headers;
 
 namespace RichMove.SmartPay.Api.Tests.WP7;
 

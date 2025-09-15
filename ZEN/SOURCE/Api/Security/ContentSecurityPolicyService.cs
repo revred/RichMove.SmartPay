@@ -1,11 +1,11 @@
+using Microsoft.Extensions.Options;
+using RichMove.SmartPay.Core.Observability;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
-using RichMove.SmartPay.Core.Observability;
 
 namespace RichMove.SmartPay.Api.Security;
 

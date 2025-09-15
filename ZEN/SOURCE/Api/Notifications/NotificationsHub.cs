@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
 using SmartPay.Core.MultiTenancy;
-using System.Security.Claims;
 
 namespace SmartPay.Api.Notifications;
 

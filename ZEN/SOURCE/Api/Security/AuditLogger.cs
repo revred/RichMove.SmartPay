@@ -1,6 +1,5 @@
-using System.Text.Json;
-using Microsoft.Extensions.Logging;
 using RichMove.SmartPay.Core.Time;
+using System.Text.Json;
 
 namespace RichMove.SmartPay.Api.Security;
 

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
-using RichMove.SmartPay.Api.Monitoring;
 using RichMove.SmartPay.Api.Infrastructure.Deployment;
+using RichMove.SmartPay.Api.Monitoring;
 using System.Globalization;
 
 namespace RichMove.SmartPay.Api.Controllers;

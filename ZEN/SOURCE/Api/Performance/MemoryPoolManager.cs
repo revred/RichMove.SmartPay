@@ -1,8 +1,6 @@
+using Microsoft.Extensions.Options;
 using System.Buffers;
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace RichMove.SmartPay.Api.Performance;
 

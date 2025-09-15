@@ -1,4 +1,3 @@
-using FastEndpoints;
 using RichMove.SmartPay.Api.Endpoints.Blockchain.Base;
 using RichMove.SmartPay.Infrastructure.Blockchain;
 using RichMove.SmartPay.Infrastructure.Blockchain.Repositories;
@@ -34,7 +33,8 @@ public sealed class CreateOnchainIntentEndpoint : BlockchainEndpoint<CreateOncha
     {
         Post("/v1/chain/intents/onchain");
         AllowAnonymous();
-        Summary(s => {
+        Summary(s =>
+        {
             s.Summary = "Create on-chain payment intent";
             s.Description = "Creates a chain-agnostic payment intent (route='ONCHAIN')";
         });

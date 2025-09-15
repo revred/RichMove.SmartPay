@@ -1,9 +1,8 @@
-using Microsoft.AspNetCore.Mvc.Testing;
 using FluentAssertions;
-using System.Net;
-using System.Text.Json;
-using System.Text;
 using RichMove.SmartPay.Core.ForeignExchange;
+using System.Net;
+using System.Text;
+using System.Text.Json;
 
 namespace RichMove.SmartPay.Api.Tests;
 

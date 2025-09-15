@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.Extensions.Configuration;
 using SmartPay.Core.Payments;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace SmartPay.Infrastructure.Payments;
 

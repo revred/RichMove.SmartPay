@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using RichMove.SmartPay.Core.Patterns;
 
 namespace RichMove.SmartPay.Api.Security;
 

@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using SmartPay.Api.Analytics;
 using SmartPay.Api.Middleware;
 using SmartPay.Api.Triggers;

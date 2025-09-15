@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
 namespace RichMove.SmartPay.Api.Validation;

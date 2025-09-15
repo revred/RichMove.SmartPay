@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using SmartPay.Infrastructure.Webhooks;
 
 namespace SmartPay.Api.Bootstrap;

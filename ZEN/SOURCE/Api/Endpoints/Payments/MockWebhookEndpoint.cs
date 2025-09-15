@@ -1,4 +1,3 @@
-using System.Text.Json;
 using FastEndpoints;
 using SmartPay.Core.Notifications;
 using SmartPay.Infrastructure.Payments;

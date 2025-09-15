@@ -1,10 +1,6 @@
-using System.Buffers;
-using System.Text;
-using System.Text.Json;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using SmartPay.Core.Notifications;
 using SmartPay.Core.MultiTenancy;
+using SmartPay.Core.Notifications;
+using System.Text.Json;
 
 namespace SmartPay.Api.Triggers;
 
@@ -42,16 +38,16 @@ public sealed class FxQuoteTriggerMiddleware(RequestDelegate next, INotification
 
                 string? quoteId = TryGetString(root, "quoteId") ?? TryGetString(root, "id");
                 string? fromCcy = TryGetString(root, "fromCurrency") ?? TryGetString(root, "from");
-                string? toCcy   = TryGetString(root, "toCurrency")   ?? TryGetString(root, "to");
+                string? toCcy = TryGetString(root, "toCurrency") ?? TryGetString(root, "to");
                 decimal? amount = TryGetDecimal(root, "amount");
-                decimal? rate   = TryGetDecimal(root, "rate");
+                decimal? rate = TryGetDecimal(root, "rate");
 
                 var tenantId = TenantContext.Current.TenantId;
                 var payload = new
                 {
                     quoteId,
                     fromCurrency = fromCcy,
-                    toCurrency   = toCcy,
+                    toCurrency = toCcy,
                     amount,
                     rate,
                     timestampUtc = DateTime.UtcNow

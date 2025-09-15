@@ -1,7 +1,6 @@
-using System.Collections.Concurrent;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RichMove.SmartPay.Core.Time;
+using System.Collections.Concurrent;
 
 namespace RichMove.SmartPay.Api.Resilience;
 

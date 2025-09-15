@@ -1,8 +1,5 @@
-using System;
-using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Xunit;
 
 namespace RichMove.SmartPay.Core.Tests.Contracts;
 

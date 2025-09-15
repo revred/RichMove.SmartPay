@@ -1,6 +1,3 @@
-using System;
-using Microsoft.Extensions.Logging;
-
 namespace RichMove.SmartPay.Api.Diagnostics;
 
 public static class Log
