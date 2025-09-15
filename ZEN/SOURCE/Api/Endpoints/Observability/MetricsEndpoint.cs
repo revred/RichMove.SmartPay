@@ -18,7 +18,7 @@ public sealed class MetricsEndpoint(IOptions<FeaturesOptions> flags) : EndpointW
     public override void Configure()
     {
         Verbs(Http.GET);
-        Routes("/metrics");
+        Routes("/metrics/guarded");
         // Requires authorization via AdminOnly policy
         Policies("AdminOnly");
         // Note: rate limiter policy name via attribute

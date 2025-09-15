@@ -118,7 +118,13 @@
         try
         {
             _loadingQuote = true;
-            var response = await Http.PostAsJsonAsync("/api/fx/quote", new { fromCurrency = "USD", toCurrency = "GBP", amount = _amount });
+
+            // Create request with required Idempotency-Key header
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/fx/quote");
+            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            request.Content = JsonContent.Create(new { fromCurrency = "USD", toCurrency = "GBP", amount = _amount });
+
+            var response = await Http.SendAsync(request);
             _quote = await response.Content.ReadAsStringAsync();
         }
         catch (Exception ex)
@@ -136,12 +142,18 @@
         try
         {
             _loadingPayment = true;
-            var response = await Http.PostAsJsonAsync("/api/payments/intent", new
+
+            // Create request with required Idempotency-Key header
+            var request = new HttpRequestMessage(HttpMethod.Post, "/api/payments/intent");
+            request.Headers.Add("Idempotency-Key", Guid.NewGuid().ToString());
+            request.Content = JsonContent.Create(new
             {
                 currency = _currency,
                 amount = _paymentAmount,
                 reference = _reference
             });
+
+            var response = await Http.SendAsync(request);
             _paymentResult = await response.Content.ReadAsStringAsync();
         }
         catch (Exception ex)

@@ -18,7 +18,7 @@ public sealed class ScalingStatusEndpoint(IOptions<FeaturesOptions> flags) : End
     public override void Configure()
     {
         Verbs(Http.GET);
-        Routes("/scaling/status");
+        Routes("/scaling/guarded");
         // Requires authorization via AdminOnly policy
         Policies("AdminOnly");
         // Note: rate limiter policy name via attribute

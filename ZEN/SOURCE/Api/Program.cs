@@ -55,10 +55,51 @@ else
 // FastEndpoints configuration - always register all endpoints
 // The blockchain endpoints handle disabled state internally via IBlockchainGate
 builder.Services.AddFastEndpoints();
-builder.Services.SwaggerDocument();
+builder.Services.SwaggerDocument(o =>
+{
+    o.DocumentSettings = s =>
+    {
+        s.DocumentName = "v1";
+        s.Title = "SmartPay API";
+        s.Version = "v1";
+    };
+    o.EnableJWTBearerAuth = false;
+    o.ShortSchemaNames = true; // Fix schema ID collisions by using short class names
+});
 
 // Add controllers for Group 8 endpoints
 builder.Services.AddControllers();
+
+// === CORS policy for Admin ===
+var cfg = builder.Configuration;
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AdminCors", policy =>
+    {
+        var origins = cfg.GetSection("Cors:AllowedOrigins").Get<string[]>();
+        if (origins is { Length: > 0 })
+        {
+            policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+        }
+        else
+        {
+            // DEV fallback: allow any localhost:* origin without hardcoding ports
+            policy.SetIsOriginAllowed(origin =>
+            {
+                if (string.IsNullOrWhiteSpace(origin)) return false;
+                try
+                {
+                    var u = new Uri(origin);
+                    return string.Equals(u.Host, "localhost", StringComparison.OrdinalIgnoreCase);
+                }
+                catch
+                {
+                    return false;
+                }
+            }).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
+        }
+    });
+});
 
 // WP3: Platform Hardening (flags, correlation, idempotency, problem details)
 builder.Services.AddSmartPayPlatformHardening(builder.Configuration);
@@ -95,6 +136,10 @@ app.UseFastEndpoints();
 app.UseSwaggerGen();
 
 app.UseHttpsRedirection();
+
+// Add CORS middleware
+app.UseRouting();
+app.UseCors("AdminCors");
 
 // Health endpoints per ChatGPT review
 app.MapGet("/health/live", () => Results.Ok("Healthy"))
