@@ -4,11 +4,15 @@
   "tools": {
     "dotnet-format": {
       "version": "8.0.400",
-      "commands": [ "dotnet-format" ]
+      "commands": [
+        "dotnet-format"
+      ]
     },
     "roslynator.dotnet.cli": {
-      "version": "0.8.0",
-      "commands": [ "roslynator" ]
+      "version": "0.11.0",
+      "commands": [
+        "roslynator"
+      ]
     }
   }
 }
