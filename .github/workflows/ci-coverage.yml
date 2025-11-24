@@ -14,7 +14,7 @@ jobs:
       MIN_COVERAGE: "0.60" # WP1 soft gate — ratchet up in later WPs
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
